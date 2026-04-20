@@ -1,4 +1,4 @@
-# Attract-Mode-Plus - Layout Designer
+<img width="1536" height="1024" alt="AMP-LD" src="https://github.com/user-attachments/assets/71ab12a0-6af4-489d-8edb-b6c0809a0256" />
 
 An all-in-one GUI toolkit for **Attract-Mode Plus** frontend development.  
 Build `layout.nut` files visually, edit romlists, generate emulator CFG files, and look up Squirrel/AM+ code references — all in one app, no extra dependencies required.
