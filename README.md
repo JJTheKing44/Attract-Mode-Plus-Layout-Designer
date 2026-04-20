@@ -322,3 +322,11 @@ Free to use and modify. Built with Python and tkinter — no external dependenci
 Color Changer
 <img width="332" height="474" alt="image" src="https://github.com/user-attachments/assets/7c577d0c-ac21-43a7-afc1-3d72094d1354" />
 
+Romlist Editor (With Bulk Edit)
+<img width="1919" height="1011" alt="image" src="https://github.com/user-attachments/assets/8ddb866c-9fd2-4dee-b630-32d404045a2f" />
+
+Emulator cfg Generator
+<img width="1919" height="935" alt="image" src="https://github.com/user-attachments/assets/ebbe6b29-8274-4f0c-8934-57089cc6a5b5" />
+
+
+
