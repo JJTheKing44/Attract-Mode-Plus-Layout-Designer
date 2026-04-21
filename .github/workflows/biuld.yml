@@ -1,0 +1,60 @@
+name: Build Python Executables
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build executable
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            pyinstaller --onefile --windowed \
+              --add-data "snippets;snippets" \
+              --add-data "Layouts.md;." \
+              --name "AttractLayoutDesigner" \
+              Attract_Layout_Designer.py
+          else
+            pyinstaller --onefile --windowed \
+              --add-data "snippets:snippets" \
+              --add-data "Layouts.md:." \
+              --name "AttractLayoutDesigner" \
+              Attract_Layout_Designer.py
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: AttractLayoutDesigner-${{ runner.os }}
+          path: dist/
+
+      - name: Create Release Assets
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
