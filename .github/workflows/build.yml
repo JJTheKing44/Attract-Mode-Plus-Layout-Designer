@@ -41,7 +41,7 @@ jobs:
     - name: Build executable with PyInstaller
       run: |
         # Replace 'your_python_file.py' with your actual filename
-        pyinstaller main.py --onefile -w
+        pyinstaller Attract-Mode Plus Layout Designer.py --onefile -w
         
         
         # If you have an icon file (app.ico), add: --icon=app.ico
