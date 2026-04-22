@@ -1,2 +1,1 @@
-pyinstaller
-tkinter  # or your GUI library
+customtkinter
