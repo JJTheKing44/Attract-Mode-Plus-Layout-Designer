@@ -39,7 +39,7 @@ jobs:
       run: |
         # Replace 'your_python_file.py' with your actual filename
         # For a GUI app with customtkinter (no console window):
-        pyinstaller --onefile --noconsole --name YourAppName --collect-data customtkinter main.py
+        pyinstaller main.py --onefile -w
         
         # Alternative if you want a console window (for debugging):
         # pyinstaller --onefile --console --name YourAppName --collect-data customtkinter main.py
