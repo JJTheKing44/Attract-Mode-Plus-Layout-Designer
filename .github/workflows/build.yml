@@ -25,7 +25,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'  # Change to match your Python version
+        python-version: '3.13'  # Change to match your Python version
 
     - name: Install dependencies
       run: |
@@ -38,16 +38,13 @@ jobs:
     - name: Build executable with PyInstaller
       run: |
         # Replace 'your_python_file.py' with your actual filename
-        # For a GUI app with customtkinter (no console window):
         pyinstaller main.py --onefile -w
         
-        # Alternative if you want a console window (for debugging):
-        # pyinstaller --onefile --console --name YourAppName --collect-data customtkinter main.py
         
         # If you have an icon file (app.ico), add: --icon=app.ico
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: YourAppName-${{ github.run_number }}
+        name: Attract-Mode Plus Layout Designer-${{ github.run_number }}
         path: dist/*.exe
