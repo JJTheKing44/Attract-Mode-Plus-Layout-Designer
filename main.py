@@ -179,6 +179,14 @@ class LayoutElement:
         if etype in ("snap", "video"):
             self.preserve_aspect_ratio = True
             self.no_audio = False
+            # Advanced transforms
+            self.pinch   = 0.0
+            self.skew_x  = 0.0
+            self.skew_y  = 0.0
+            # RGB tint (255 = no tint on that channel)
+            self.red     = 255
+            self.green   = 255
+            self.blue    = 255
         if etype == "wheel":
             self.width = 200
             self.height = 200
@@ -221,6 +229,21 @@ class LayoutElement:
                 lines.append(f'{pad}{vname}.preserve_aspect_ratio = true;')
             if getattr(self, "no_audio", False):
                 lines.append(f'{pad}{vname}.video_flags = Vid.NoAudio;')
+            # Advanced transforms (only emit if non-default)
+            if getattr(self, "pinch",  0.0) != 0.0:
+                lines.append(f'{pad}{vname}.pinch = {round(self.pinch, 4)};')
+            if getattr(self, "skew_x", 0.0) != 0.0:
+                lines.append(f'{pad}{vname}.skew_x = {round(self.skew_x, 4)};')
+            if getattr(self, "skew_y", 0.0) != 0.0:
+                lines.append(f'{pad}{vname}.skew_y = {round(self.skew_y, 4)};')
+            # RGB tint (only emit if not pure white 255,255,255)
+            r = getattr(self, "red",   255)
+            g = getattr(self, "green", 255)
+            b = getattr(self, "blue",  255)
+            if (r, g, b) != (255, 255, 255):
+                lines.append(f'{pad}{vname}.red = {r};')
+                lines.append(f'{pad}{vname}.green = {g};')
+                lines.append(f'{pad}{vname}.blue = {b};')
 
         if self.rotation != 0:
             lines.append(f'{pad}{vname}.rotation = {self.rotation};')
@@ -230,6 +253,8 @@ class LayoutElement:
             lines.append(f'{pad}{vname}.blend_mode = BlendMode.{self.blend_mode};')
         if not self.visible:
             lines.append(f'{pad}{vname}.visible = false;')
+        if self.zorder != 0:
+            lines.append(f'{pad}{vname}.zorder = {self.zorder};')
 
         if self.anim_enabled:
             lines.append(f'{pad}animation.add( PropertyAnimation( {vname}, {{')
@@ -548,6 +573,16 @@ class PropertiesPanel(ctk.CTkFrame):
         self._entry(self.prop_frame, "rotation", "Rotation")
         self._entry(self.prop_frame, "zorder",   "Z-Order")
 
+        self._sep_label(self.prop_frame, "SNAP / VIDEO TRANSFORMS")
+        self._entry(self.prop_frame, "pinch",  "Pinch")
+        self._entry(self.prop_frame, "skew_x", "Skew X")
+        self._entry(self.prop_frame, "skew_y", "Skew Y")
+
+        self._sep_label(self.prop_frame, "RGB TINT  (snap / video)")
+        self._entry(self.prop_frame, "red",   "Red  (0-255)")
+        self._entry(self.prop_frame, "green", "Green (0-255)")
+        self._entry(self.prop_frame, "blue",  "Blue  (0-255)")
+
         self._sep_label(self.prop_frame, "APPEARANCE")
         self._entry(self.prop_frame, "alpha", "Alpha (0-255)")
         self._combo(self.prop_frame, "blend_mode", "Blend Mode", BLEND_OPTIONS)
@@ -601,8 +636,10 @@ class PropertiesPanel(ctk.CTkFrame):
         try:
             if key in ("x", "y", "width", "height", "rotation", "zorder"):
                 setattr(elem, key, int(float(value)))
-            elif key in ("alpha",):
+            elif key in ("alpha", "red", "green", "blue"):
                 setattr(elem, key, max(0, min(255, int(float(value)))))
+            elif key in ("pinch", "skew_x", "skew_y"):
+                setattr(elem, key, round(float(value), 4))
             elif key in ("font_size", "anim_duration"):
                 setattr(elem, key, int(float(value)))
             elif key in ("visible", "preserve_aspect_ratio", "no_audio", "anim_enabled"):
@@ -621,13 +658,18 @@ class PropertiesPanel(ctk.CTkFrame):
 
         str_keys = ["name", "blend_mode", "trigger", "align", "text_string", "font", "anim_type"]
         int_keys = ["x", "y", "width", "height", "rotation", "alpha", "zorder",
-                    "font_size", "anim_duration"]
+                    "font_size", "anim_duration", "red", "green", "blue"]
+        float_keys = ["pinch", "skew_x", "skew_y"]
         bool_keys = ["visible", "preserve_aspect_ratio", "no_audio", "anim_enabled"]
 
         for k in str_keys + int_keys:
             if k in self.vars:
                 v = getattr(elem, k, "")
                 self.vars[k].set(str(v) if v is not None else "")
+        for k in float_keys:
+            if k in self.vars:
+                v = getattr(elem, k, 0.0)
+                self.vars[k].set(str(v) if v is not None else "0.0")
         for k in bool_keys:
             if k in self.vars:
                 self.vars[k].set(getattr(elem, k, False))
@@ -1989,7 +2031,7 @@ class AttractLayoutBuilder(ctk.CTk):
                                  button_color=COLORS["border"],
                                  dropdown_fg_color=COLORS["panel"],
                                  text_color=COLORS["text"],
-                                 font=ctk.CTkFont(family="Courier", size=10),
+                                 font=ctk.CTkFont(family="Courier", size=11),
                                  command=lambda v: _on_emu_change())
             cb.pack(side="left")
         _row("Emulator:", _make_emu)
@@ -2003,7 +2045,7 @@ class AttractLayoutBuilder(ctk.CTk):
                                                button_color=COLORS["border"],
                                                dropdown_fg_color=COLORS["panel"],
                                                text_color=COLORS["text"],
-                                               font=ctk.CTkFont(family="Courier", size=10),
+                                               font=ctk.CTkFont(family="Courier", size=11),
                                                command=lambda v: _on_sys_change())
             self._cfg_sys_cb.pack(side="left")
         _row("System:", _make_sys)
@@ -2013,7 +2055,7 @@ class AttractLayoutBuilder(ctk.CTk):
             ctk.CTkEntry(f, textvariable=self._cfg_ext_var,
                          fg_color=COLORS["panel2"], text_color=COLORS["text"],
                          border_color=COLORS["border"], width=200, height=28,
-                         font=ctk.CTkFont(family="Courier", size=10)).pack(side="left")
+                         font=ctk.CTkFont(family="Courier", size=11)).pack(side="left")
         _row("ROM Extensions:", _make_ext)
 
         # ── Other: exe + args (hidden by default) ────────────────────────────
@@ -2022,12 +2064,12 @@ class AttractLayoutBuilder(ctk.CTk):
             ctk.CTkEntry(f, textvariable=self._cfg_exec_var,
                          fg_color=COLORS["panel2"], text_color=COLORS["text"],
                          border_color=COLORS["border"], width=230, height=28,
-                         font=ctk.CTkFont(family="Courier", size=10)).pack(side="left"))
+                         font=ctk.CTkFont(family="Courier", size=11)).pack(side="left"))
         self._cfg_args_frame = _row("Arguments:", lambda f:
             ctk.CTkEntry(f, textvariable=self._cfg_args_var,
                          fg_color=COLORS["panel2"], text_color=COLORS["text"],
                          border_color=COLORS["border"], width=230, height=28,
-                         font=ctk.CTkFont(family="Courier", size=10)).pack(side="left"))
+                         font=ctk.CTkFont(family="Courier", size=11)).pack(side="left"))
 
         # ── Logic callbacks ───────────────────────────────────────────────────
         def _update_preview(*_):
@@ -3339,7 +3381,8 @@ OUTPUT:
   
 THANKS: Claude & Deepseek Ai
         JJTheKing
-        Tankman3737 Wheel Code Snippets        
+        Tankman3737 Wheel Code Snippets
+        Version 3 04/23/26
 """
         win = ctk.CTkToplevel(self)
         win.title("Help")
