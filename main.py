@@ -1017,19 +1017,81 @@ class AttractLayoutBuilder(ctk.CTk):
                          anchor="w", padx=8, pady=(8, 4))
 
         self.new_elem_type = tk.StringVar(value="snap")
+
+        # ── Element type descriptions for tooltip ─────────────────────────────
+        ELEM_DESCS = {
+            "snap":         "Current game snapshot image.\nDisplays the selected game's screenshot.",
+            "wheel":        "Game logo / wheel art.\nThe stylized title image for the game.",
+            "boxart":       "Box art image.\nFront cover of the game's box.",
+            "marquee":      "Arcade cabinet marquee image.\nThe header art strip above the screen.",
+            "video":        "Video preview.\nPlays a video clip for the selected game.",
+            "text":         "Text element.\nDisplays a meta field, clock, or custom string.",
+            "flyer":        "Promotional flyer image.\nOriginal arcade or game advertisement art.",
+            "fanart":       "Fan-made artwork.\nCommunity created background or artwork.",
+            "surface":      "Surface / container.\nA layered drawing surface for grouping elements.",
+            "artwork":      "Generic artwork slot.\nMaps to any configured artwork path.",
+            "shader_layer": "Shader layer.\nApplies a GLSL shader effect over other elements.",
+        }
+
+        # ── Shared tooltip window for element types ───────────────────────────
+        _elem_tt = [None]
+
+        def _show_elem_tt(e, text):
+            if _elem_tt[0]:
+                _elem_tt[0].destroy()
+            tw = tk.Toplevel(self)
+            tw.wm_overrideredirect(True)
+            tw.wm_geometry(f"+{e.x_root+18}+{e.y_root+8}")
+            tw.attributes("-topmost", True)
+            border = tk.Frame(tw, bg=COLORS["accent"], padx=1, pady=1)
+            border.pack()
+            inner = tk.Frame(border, bg=COLORS["panel"], padx=10, pady=7)
+            inner.pack()
+            tk.Label(inner, text=text, bg=COLORS["panel"], fg=COLORS["text"],
+                     font=("Courier", 11), justify="left", wraplength=220).pack()
+            _elem_tt[0] = tw
+
+        def _hide_elem_tt(e):
+            if _elem_tt[0]:
+                _elem_tt[0].destroy()
+                _elem_tt[0] = None
+
         type_frame = ctk.CTkScrollableFrame(top, fg_color=COLORS["panel"])
         type_frame.pack(fill="both", expand=True, padx=6)
+
         for et in ELEMENT_TYPES:
             icon = {"snap": "📷", "wheel": "🎡", "boxart": "📦", "marquee": "📺",
                     "video": "▶", "text": "T", "flyer": "🗞", "fanart": "🖼",
                     "surface": "▣", "artwork": "🎨", "shader_layer": "✨"}.get(et, "?")
-            rb = ctk.CTkRadioButton(type_frame, text=f"{icon} {et}",
+            desc = ELEM_DESCS.get(et, "")
+
+            # Hoverable row frame
+            row = tk.Frame(type_frame, bg=COLORS["panel"],
+                           highlightthickness=1,
+                           highlightbackground=COLORS["panel"],
+                           cursor="hand2")
+            row.pack(fill="x", pady=2, padx=2)
+
+            rb = ctk.CTkRadioButton(row, text=f"{icon}  {et}",
                                     variable=self.new_elem_type, value=et,
                                     text_color=COLORS["text"],
                                     fg_color=COLORS["accent"],
                                     hover_color=COLORS["accent"],
-                                    font=ctk.CTkFont(family="Courier", size=11))
-            rb.pack(anchor="w", pady=2)
+                                    font=ctk.CTkFont(family="Courier", size=13, weight="bold"))
+            rb.pack(side="left", padx=6, pady=4)
+
+            # Click anywhere on the row also selects this type
+            row.bind("<Button-1>", lambda e, v=et: self.new_elem_type.set(v))
+
+            for w in (row, rb):
+                w.bind("<Enter>", lambda e, r=row, t=f"{icon}  {et}\n\n{desc}":
+                       (r.config(highlightbackground=COLORS["accent"],
+                                 bg=COLORS["selected"]),
+                        _show_elem_tt(e, t)))
+                w.bind("<Leave>", lambda e, r=row:
+                       (r.config(highlightbackground=COLORS["panel"],
+                                 bg=COLORS["panel"]),
+                        _hide_elem_tt(e)))
 
         self._btn(top, "+ Add Element", self.add_element,
                   color=None).pack(fill="x", padx=6, pady=6)
@@ -1103,14 +1165,6 @@ class AttractLayoutBuilder(ctk.CTk):
                 self._tt_win.destroy()
                 self._tt_win = None
 
-        # ── Info bar ──
-        self.mod_info_var = tk.StringVar(value="  Hover a module to see details")
-        mod_info = tk.Label(parent, textvariable=self.mod_info_var,
-                            bg=COLORS["panel2"], fg=COLORS["accent"],
-                            font=("Courier", 11), wraplength=215,
-                            justify="left", anchor="nw", padx=6, pady=5)
-        mod_info.pack(fill="x", padx=4, pady=(0, 2))
-
         # ── Module rows ──
         self.module_vars = {}
         for name, file, desc in MODULE_LIST:
@@ -1127,22 +1181,24 @@ class AttractLayoutBuilder(ctk.CTk):
                                   text_color=COLORS["text"],
                                   fg_color=COLORS["accent"],
                                   hover_color=COLORS["accent"],
-                                  font=ctk.CTkFont(family="Courier", size=11, weight="bold"),
+                                  font=ctk.CTkFont(family="Courier", size=13, weight="bold"),
                                   command=self.update_code)
-            cb.pack(side="left", padx=(2, 0), pady=2)
+            cb.pack(side="left", padx=(2, 0), pady=4)
 
             fl = tk.Label(row, text=file, bg=COLORS["panel"],
                           fg=COLORS["text_dim"], font=("Courier", 11))
             fl.pack(side="right", padx=6)
 
             for w in (row, cb, fl):
-                w.bind("<Enter>", lambda e, r=row, t=tip, n=name, f=file, d=desc:
-                       (r.config(highlightbackground=COLORS["accent"]),
-                        self.mod_info_var.set(f"◈ {n}  |  {f}\n{d}"),
+                w.bind("<Enter>", lambda e, r=row, t=tip, f2=fl:
+                       (r.config(highlightbackground=COLORS["accent"],
+                                 bg=COLORS["selected"]),
+                        f2.config(bg=COLORS["selected"]),
                         _show_tt(e, t)))
-                w.bind("<Leave>", lambda e, r=row:
-                       (r.config(highlightbackground=COLORS["panel"]),
-                        self.mod_info_var.set("  Hover a module to see details"),
+                w.bind("<Leave>", lambda e, r=row, f2=fl:
+                       (r.config(highlightbackground=COLORS["panel"],
+                                 bg=COLORS["panel"]),
+                        f2.config(bg=COLORS["panel"]),
                         _hide_tt(e)))
 
 
@@ -2259,9 +2315,45 @@ class AttractLayoutBuilder(ctk.CTk):
                                     yscrollcommand=prev_sb_y.set,
                                     xscrollcommand=prev_sb_x.set,
                                     state="disabled")
-        self._cfg_preview.pack(fill="x", padx=8, pady=(0, 8))
+        self._cfg_preview.pack(fill="x", padx=8, pady=(0, 4))
         prev_sb_y.config(command=self._cfg_preview.yview)
         prev_sb_x.config(command=self._cfg_preview.xview)
+
+        # ── Emulator website links ────────────────────────────────────────────
+        _sep("EMULATOR WEBSITES")
+        links_frame = tk.Frame(inner, bg=COLORS["panel"])
+        links_frame.pack(fill="x", padx=8, pady=(0, 8))
+
+        emu_links = [
+            ("MAME",           "https://www.mamedev.org"),
+            ("RetroArch",      "https://www.retroarch.com"),
+            ("PCSX2",          "https://pcsx2.net"),
+            ("RPCS3",          "https://rpcs3.net"),
+            ("Dolphin",        "https://dolphin-emu.org"),
+            ("Cemu",           "https://cemu.info"),
+            ("Eden / Switch",  "https://eden-emu.dev/noscript/index.html"),
+            ("Duckstation",    "https://www.duckstation.org"),
+            ("PPSSPP",         "https://www.ppsspp.org"),
+            ("FlyBoy FBNeo",   "https://github.com/finalburnneo/FBNeo"),
+            ("ScummVM",        "https://www.scummvm.org"),
+            ("DOSBox",         "https://www.dosbox.com"),
+        ]
+
+        import webbrowser
+        cols = 2
+        for i, (label, url) in enumerate(emu_links):
+            row_idx, col_idx = divmod(i, cols)
+            b = ctk.CTkButton(
+                links_frame, text=f"🌐 {label}",
+                fg_color=COLORS["panel2"],
+                hover_color=COLORS["accent"],
+                text_color=COLORS["text"],
+                font=ctk.CTkFont(family="Courier", size=11),
+                corner_radius=4, height=28,
+                command=lambda u=url: webbrowser.open(u))
+            b.grid(row=row_idx, column=col_idx,
+                   padx=3, pady=3, sticky="ew")
+            links_frame.columnconfigure(col_idx, weight=1)
 
         # ── Status ───────────────────────────────────────────────────────────
         self._cfg_status_var = tk.StringVar(value="Ready — configure and click Save .cfg")
@@ -3490,7 +3582,7 @@ THANKS: Claude & Deepseek Ai
         JJTheKing
         Tankman3737 Wheel Code Snippets
         PaCiFiKbAllA  - Feedback
-        Version 4.2 (04/25/2026)        
+        Version 4.4 (04/25/2026)        
 """
         win = ctk.CTkToplevel(self)
         win.title("Help")
