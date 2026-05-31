@@ -1,4 +1,5 @@
 """
+# ─── ATTRACT-MODE PLUS LAYOUT DESIGNER ──────────────────────────────────────
 Attract-Mode Plus Layout Designer
 A visual GUI tool for creating layout.nut files for Attract-Mode Plus frontend.
 """
@@ -10,8 +11,10 @@ import json
 import os
 import math
 
+
+# ─── CONFIGURATION & CONSTANTS ──────────────────────────────────────────────
 # ── App version & website URL ─────────────────────────────────────────────────
-VERSION     = "5.9"
+VERSION     = "6.5"
 UPDATE_URL  = "https://free-3980544.webador.com/am-updates/"   # ← replace with your URL
 
 # ── CustomTkinter appearance ─────────────────────────────────────────────────
@@ -59,7 +62,6 @@ MODULE_LIST = [
     ("wheel",            "wheel.nut",             "Wheel artwork list navigation and display"),
 ]
 
-ORIENT_OPTIONS = ["RotateNone", "RotateLeft", "RotateRight", "RotateFlip"]
 BLEND_OPTIONS = ["None", "Alpha", "Premult", "Add", "Screen", "Multiply"]
 TRIGGER_OPTIONS = ["ToNewSelection", "FromOldSelection", "EndNavigation",
                    "StartLayout", "EndLayout", "ScreenSaver"]
@@ -147,7 +149,8 @@ META_TOKENS = [
 ]
 
 
-# ─── Colour themes ────────────────────────────────────────────────────────────
+
+# ─── THEME & COLOUR SYSTEM ──────────────────────────────────────────────────
 
 THEMES = {
     "Arctic Light": {
@@ -236,8 +239,9 @@ def _sync_colors(theme_name=None):
     ctk.set_appearance_mode(t["_ctk_mode"])
 
 
-# ─── Layout Element ───────────────────────────────────────────────────────────
 
+
+# ─── DATA MODEL ──────────────────────────────────────────────────────────────
 class LayoutElement:
     def __init__(self, etype="snap", name=None):
         self.type = etype
@@ -256,6 +260,11 @@ class LayoutElement:
         self.anim_type = "fade"
         self.anim_duration = 300
         self.extra = {}
+
+        # Preview image path — used only for canvas display, not written to .nut
+        # Supported on all visual/artwork types so you can drag a real image onto them
+        self.preview_path = ""
+
         # type-specific
         if etype == "text":
             self.text_string = "[Title]"
@@ -339,7 +348,7 @@ class LayoutElement:
             if getattr(self, "pinch_x",  0.0) != 0.0:
                 lines.append(f'{pad}{vname}.pinch_x = {round(self.pinch_x, 4)};')
             if getattr(self, "pinch_y",  0.0) != 0.0:
-                lines.append(f'{pad}{vname}.pinch_y = {round(self.pinch_y, 4)};')    
+                lines.append(f'{pad}{vname}.pinch_y = {round(self.pinch_y, 4)};')
             if getattr(self, "skew_x", 0.0) != 0.0:
                 lines.append(f'{pad}{vname}.skew_x = {round(self.skew_x, 4)};')
             if getattr(self, "skew_y", 0.0) != 0.0:
@@ -408,8 +417,9 @@ def _px_to_expr(value, layout_dim, dim_var):
     return f"{dim_var}*{rs}"
 
 
-# ─── Canvas Preview ───────────────────────────────────────────────────────────
 
+
+# ─── CANVAS ──────────────────────────────────────────────────────────────────
 class LayoutCanvas(tk.Canvas):
     # ── PERFORMANCE SETTINGS ─────────────────────────────────────────────────
     # Increase DRAG_THROTTLE_MS to skip more frames during drag (smoother but
@@ -493,7 +503,7 @@ class LayoutCanvas(tk.Canvas):
                     text="Install Pillow to show background images\npip install pillow",
                     fill=COLORS["text_dim"], font=("Courier", 11), justify="center"
                 )
-        
+
         # Grid (controlled by SHOW_GRID and GRID_SPACING class vars)
         if self.SHOW_GRID and self.GRID_SPACING > 0:
             grid = self.GRID_SPACING
@@ -529,30 +539,62 @@ class LayoutCanvas(tk.Canvas):
             self.create_rectangle(ex1, ey1, ex2, ey2, fill=fill, stipple=stipple,
                                   outline=border, width=bw, tags=f"elem_{id(elem)}")
 
-            # For image elements — render the actual PNG if loaded and Pillow available
-            if elem.type == "image" and getattr(elem, "image_path", ""):
+            # ── Render preview image if one is assigned ───────────────────────
+            # Works for any element type: snap, video, boxart, marquee, wheel,
+            # flyer, fanart, artwork, image — drag any PNG/JPG/MP4 onto the element
+            preview_file = (getattr(elem, "preview_path", "") or
+                            getattr(elem, "image_path", ""))
+            if preview_file:
                 try:
                     from PIL import Image, ImageTk
                     cw = max(1, int(ex2 - ex1))
                     ch = max(1, int(ey2 - ey1))
-                    cache_key = (id(elem), elem.image_path, cw, ch)
+                    cache_key = (id(elem), preview_file, cw, ch)
                     if cache_key not in self._img_cache:
-                        # Evict old sizes for this element
-                        old = [k for k in self._img_cache if k[0] == id(elem)]
-                        for k in old:
+                        # Evict old cached sizes for this element
+                        for k in [k for k in self._img_cache if k[0] == id(elem)]:
                             del self._img_cache[k]
-                        img = Image.open(elem.image_path).convert("RGBA")
-                        img = img.resize((cw, ch), Image.BILINEAR)
-                        self._img_cache[cache_key] = ImageTk.PhotoImage(img)
-                    self.create_image(ex1, ey1, anchor="nw",
-                                      image=self._img_cache[cache_key],
-                                      tags=f"elem_{id(elem)}")
-                    # Still draw the selection border on top
-                    self.create_rectangle(ex1, ey1, ex2, ey2, fill="",
-                                          outline=border, width=bw)
+
+                        ext = os.path.splitext(preview_file)[1].lower()
+                        if ext in (".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv"):
+                            # Extract first frame from video using OpenCV if available
+                            try:
+                                import cv2
+                                cap = cv2.VideoCapture(preview_file)
+                                ok, frame = cap.read()
+                                cap.release()
+                                if ok:
+                                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                                    pil_img = Image.fromarray(frame_rgb).convert("RGBA")
+                                else:
+                                    pil_img = None
+                            except ImportError:
+                                pil_img = None   # cv2 not installed — show placeholder
+                        else:
+                            pil_img = Image.open(preview_file).convert("RGBA")
+
+                        if pil_img:
+                            pil_img = pil_img.resize((cw, ch), Image.BILINEAR)
+                            self._img_cache[cache_key] = ImageTk.PhotoImage(pil_img)
+                        else:
+                            self._img_cache[cache_key] = None
+
+                    tk_img = self._img_cache.get(cache_key)
+                    if tk_img:
+                        self.create_image(ex1, ey1, anchor="nw",
+                                          image=tk_img,
+                                          tags=f"elem_{id(elem)}")
+                        # Draw border on top of image
+                        self.create_rectangle(ex1, ey1, ex2, ey2, fill="",
+                                              outline=border, width=bw)
+                    elif self._img_cache.get(cache_key) is None:
+                        # cv2 not available — show a hint inside the box
+                        self.create_text(cx, cy, justify="center",
+                                         text="📹 pip install\nopencv-python\nfor video preview",
+                                         font=("Courier", 9), fill=COLORS["text_dim"])
                 except Exception:
-                    pass  # Fall through to text label if image can't load
-            
+                    pass   # fall through to icon/label
+
             # Type icon/label (controlled by SHOW_ICONS class var)
             cx = (ex1 + ex2) / 2
             cy = (ey1 + ey2) / 2
@@ -657,7 +699,8 @@ class LayoutCanvas(tk.Canvas):
             m.add_command(label="Send Backward", command=lambda: self.app.change_zorder(elem, -1))
             m.tk_popup(event.x_root, event.y_root)
 
-# ─── Properties Panel ─────────────────────────────────────────────────────────
+
+# ─── PROPERTIES PANEL ───────────────────────────────────────────────────────
 
 class PropertiesPanel(ctk.CTkFrame):
     def __init__(self, parent, app, **kw):
@@ -677,12 +720,8 @@ class PropertiesPanel(ctk.CTkFrame):
         tk.Label(f, text=label, bg=COLORS["panel"], fg=COLORS["text_dim"],
                  font=("Courier", 12), anchor="w").pack(side="top", anchor="w")
         v = tk.StringVar()
-        e = ctk.CTkEntry(f, textvariable=v,
-                         fg_color=COLORS["panel2"], text_color=COLORS["text"],
-                         border_color=COLORS["border"],
-                         font=ctk.CTkFont(family="Courier", size=12),
-                         height=28)
-        e.pack(side="top", fill="x", expand=True)
+        ctk.CTkEntry(f, textvariable=v, **_ENTRY_KW, font=_cfont(12), height=28
+                     ).pack(side="top", fill="x", expand=True)
         v.trace_add("write", lambda *a: self._on_change(key, v.get()))
         self.vars[key] = v
         return v
@@ -694,14 +733,8 @@ class PropertiesPanel(ctk.CTkFrame):
                  font=("Courier", 12), anchor="w").pack(side="top", anchor="w")
         v = tk.StringVar()
         c = ctk.CTkComboBox(f, variable=v, values=values, state="readonly",
-                            fg_color=COLORS["panel2"],
-                            button_color=COLORS["border"],
-                            dropdown_fg_color=COLORS["panel"],
-                            text_color=COLORS["text"],
-                            font=ctk.CTkFont(family="Courier", size=12),
-                            height=28)
+                            **_COMBO_KW, font=_cfont(12), height=28, width=1)
         c.pack(side="top", fill="x", expand=True)
-        c.configure(width=1)   # let pack geometry control width
         v.trace_add("write", lambda *a: self._on_change(key, v.get()))
         self.vars[key] = v
         return v
@@ -712,21 +745,22 @@ class PropertiesPanel(ctk.CTkFrame):
                              text_color=COLORS["text"],
                              fg_color=COLORS["accent"],
                              hover_color=COLORS["accent"],
-                             font=ctk.CTkFont(family="Courier", size=12),
+                             font=_cfont(12),
                              command=lambda: self._on_change(key, v.get()))
         cb.pack(anchor="w", padx=8, pady=3)
         self.vars[key] = v
         return v
 
+    # ── UI Construction ─────────────────────────────────────────────────────
     def _build_ui(self):
         ctk.CTkLabel(self, text="◈ PROPERTIES", text_color=COLORS["accent"],
-                     font=ctk.CTkFont(family="Courier", size=13, weight="bold")).pack(
+                     font=_cfont(13, bold=True)).pack(
                          anchor="w", padx=8, pady=(10, 4))
 
         self.no_sel = ctk.CTkLabel(self,
                                     text="No element selected.\nClick an element\non the canvas.",
                                     text_color=COLORS["text_dim"],
-                                    font=ctk.CTkFont(family="Courier", size=12),
+                                    font=_cfont(12),
                                     justify="center")
         self.no_sel.pack(pady=20)
 
@@ -752,20 +786,57 @@ class PropertiesPanel(ctk.CTkFrame):
         path_row = tk.Frame(img_f, bg=COLORS["panel"])
         path_row.pack(fill="x")
         ctk.CTkEntry(path_row, textvariable=self._img_path_var,
-                     fg_color=COLORS["panel2"], text_color=COLORS["text"],
-                     border_color=COLORS["border"],
-                     font=ctk.CTkFont(family="Courier", size=11),
+                     **_ENTRY_KW,
+                     font=_cfont(11),
                      placeholder_text="Browse or drop a PNG / JPG",
                      height=28).pack(side="left", fill="x", expand=True, padx=(0, 4))
         ctk.CTkButton(path_row, text="Browse",
                       fg_color=COLORS["panel2"], hover_color=COLORS["accent"],
                       text_color=COLORS["text"],
-                      font=ctk.CTkFont(family="Courier", size=11),
+                      font=_cfont(11),
                       corner_radius=4, height=28, width=64,
                       command=self._browse_image_path).pack(side="left")
         self._img_path_var.trace_add("write",
             lambda *a: self._on_image_path_change())
         self.vars["image_path"] = self._img_path_var
+
+        # ── Canvas Preview path ───────────────────────────────────────────────
+        # For snap, video, boxart, marquee, wheel, flyer, fanart, artwork
+        # Drag a PNG/JPG/MP4 onto the canvas element OR browse here.
+        # This path is display-only — never written to layout.nut.
+        self._sep_label(self.prop_frame, "CANVAS PREVIEW  (display only)")
+        pv_f = tk.Frame(self.prop_frame, bg=COLORS["panel"])
+        pv_f.pack(fill="x", padx=6, pady=2)
+        tk.Label(pv_f, text="Preview File", bg=COLORS["panel"], fg=COLORS["text_dim"],
+                 font=("Courier", 12), anchor="w").pack(side="top", anchor="w")
+        tk.Label(pv_f, text="PNG/JPG/MP4 — shown on canvas only, not saved to .nut",
+                 bg=COLORS["panel"], fg=COLORS["text_dim"],
+                 font=("Courier", 9), anchor="w").pack(side="top", anchor="w")
+
+        self._preview_path_var = tk.StringVar()
+        pv_row = tk.Frame(pv_f, bg=COLORS["panel"])
+        pv_row.pack(fill="x")
+        ctk.CTkEntry(pv_row, textvariable=self._preview_path_var,
+                     **_ENTRY_KW,
+                     font=_cfont(11),
+                     placeholder_text="Drop an image or video onto the element",
+                     height=28).pack(side="left", fill="x", expand=True, padx=(0, 4))
+        ctk.CTkButton(pv_row, text="Browse",
+                      fg_color=COLORS["panel2"], hover_color=COLORS["accent"],
+                      text_color=COLORS["text"],
+                      font=_cfont(11),
+                      corner_radius=4, height=28, width=64,
+                      command=self._browse_preview_path).pack(side="left")
+        self._preview_path_var.trace_add("write",
+            lambda *a: self._on_preview_path_change())
+
+        ctk.CTkButton(pv_f, text="✕ Clear Preview",
+                      fg_color=COLORS["panel2"], hover_color=COLORS["accent"],
+                      text_color=COLORS["text_dim"],
+                      font=_cfont(10),
+                      corner_radius=4, height=24,
+                      command=self._clear_preview_path).pack(
+                          side="top", anchor="w", pady=(4, 0))
 
         self._sep_label(self.prop_frame, "SNAP / VIDEO TRANSFORMS")
         self._entry(self.prop_frame, "pinch_x",  "Pinch X")
@@ -801,7 +872,7 @@ class PropertiesPanel(ctk.CTkFrame):
             button_color=COLORS["border"],
             dropdown_fg_color=COLORS["panel"],
             text_color=COLORS["text"],
-            font=ctk.CTkFont(family="Courier", size=12),
+            font=_cfont(12),
             height=28,
             command=lambda v: self._on_meta_pick(v))
         self._meta_combo.pack(side="top", fill="x", expand=True)
@@ -815,9 +886,8 @@ class PropertiesPanel(ctk.CTkFrame):
                  font=("Courier", 12), anchor="w").pack(side="top", anchor="w")
         self._custom_str_var = tk.StringVar()
         ctk.CTkEntry(cf_inner, textvariable=self._custom_str_var,
-                     fg_color=COLORS["panel2"], text_color=COLORS["text"],
-                     border_color=COLORS["border"],
-                     font=ctk.CTkFont(family="Courier", size=12),
+                     **_ENTRY_KW,
+                     font=_cfont(12),
                      height=28).pack(side="top", fill="x", expand=True)
         self._custom_str_var.trace_add("write",
             lambda *a: self._on_change("text_string", self._custom_str_var.get()))
@@ -836,7 +906,7 @@ class PropertiesPanel(ctk.CTkFrame):
             button_color=COLORS["border"],
             dropdown_fg_color=COLORS["panel"],
             text_color=COLORS["text"],
-            font=ctk.CTkFont(family="Courier", size=12),
+            font=_cfont(12),
             height=28,
             command=lambda v: self._on_font_pick(v))
         font_combo.pack(side="top", fill="x", expand=True)
@@ -860,7 +930,7 @@ class PropertiesPanel(ctk.CTkFrame):
             button_color=COLORS["border"],
             dropdown_fg_color=COLORS["panel"],
             text_color=COLORS["text"],
-            font=ctk.CTkFont(family="Courier", size=12),
+            font=_cfont(12),
             height=28,
             command=lambda v: self._on_change("font_size", v))
         size_combo.pack(side="top", fill="x", expand=True)
@@ -880,7 +950,7 @@ class PropertiesPanel(ctk.CTkFrame):
         self.color_btn = ctk.CTkButton(fc, text="  Choose Color  ", height=28,
                                         fg_color="#ffffff", text_color="#000000",
                                         hover_color=COLORS["accent"],
-                                        font=ctk.CTkFont(family="Courier", size=12),
+                                        font=_cfont(12),
                                         command=self._pick_color)
         self.color_btn.pack(side="top", fill="x", expand=True)
         self.vars["font_color"] = "#ffffff"
@@ -934,12 +1004,43 @@ class PropertiesPanel(ctk.CTkFrame):
             return
         path = self._img_path_var.get().strip()
         elem.image_path = path
-        # Clear the canvas cache for this element so it re-renders
-        old = [k for k in self.app.canvas._img_cache if k[0] == id(elem)]
-        for k in old:
+        for k in [k for k in self.app.canvas._img_cache if k[0] == id(elem)]:
             del self.app.canvas._img_cache[k]
         self.app.update_code()
         self.app.canvas.redraw()
+
+    def _browse_preview_path(self):
+        path = filedialog.askopenfilename(
+            title="Select Preview Image or Video",
+            filetypes=[
+                ("Images & Video", "*.png *.jpg *.jpeg *.bmp *.gif *.webp "
+                 "*.mp4 *.avi *.mkv *.mov *.wmv *.flv"),
+                ("Images", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"),
+                ("Video",  "*.mp4 *.avi *.mkv *.mov *.wmv *.flv"),
+                ("All files", "*.*"),
+            ]
+        )
+        if path:
+            self._preview_path_var.set(path)
+
+    def _on_preview_path_change(self):
+        elem = self.app.selected_element
+        if not elem:
+            return
+        path = self._preview_path_var.get().strip()
+        elem.preview_path = path
+        for k in [k for k in self.app.canvas._img_cache if k[0] == id(elem)]:
+            del self.app.canvas._img_cache[k]
+        self.app.canvas.redraw()
+
+    def _clear_preview_path(self):
+        elem = self.app.selected_element
+        if elem:
+            elem.preview_path = ""
+            self._preview_path_var.set("")
+            for k in [k for k in self.app.canvas._img_cache if k[0] == id(elem)]:
+                del self.app.canvas._img_cache[k]
+            self.app.canvas.redraw()
 
     def _on_change(self, key, value):
         elem = self.app.selected_element
@@ -989,6 +1090,9 @@ class PropertiesPanel(ctk.CTkFrame):
         # ── Image path ───────────────────────────────────────────────────────
         self._img_path_var.set(getattr(elem, "image_path", ""))
 
+        # ── Canvas preview path ───────────────────────────────────────────────
+        self._preview_path_var.set(getattr(elem, "preview_path", ""))
+
         # ── Restore font combo (editable — may not be in FONT_OPTIONS list) ──
         font_val = getattr(elem, "font", "Arial")
         self._font_pick_var.set(font_val if font_val else "Arial")
@@ -1019,6 +1123,19 @@ class PropertiesPanel(ctk.CTkFrame):
         self.no_sel.pack(pady=20)
 
 
+
+def _cfont(size, bold=False):
+    """Shorthand for the standard Courier CTkFont used throughout the UI."""
+    return ctk.CTkFont(family="Courier", size=size,
+                       weight="bold" if bold else "normal")
+
+
+# Common CTkEntry / CTkComboBox kwargs — avoids repeating on every widget
+_ENTRY_KW = dict(fg_color=COLORS["panel2"], text_color=COLORS["text"],
+                 border_color=COLORS["border"])
+_COMBO_KW = dict(fg_color=COLORS["panel2"], button_color=COLORS["border"],
+                 dropdown_fg_color=COLORS["panel"], text_color=COLORS["text"])
+
 def _is_light(hex_color):
     """Return True if a hex colour is perceived as light (for readable button text)."""
     try:
@@ -1028,8 +1145,9 @@ def _is_light(hex_color):
     except Exception:
         return False
 
-# ─── Main Application ─────────────────────────────────────────────────────────
 
+
+# ─── MAIN APPLICATION ────────────────────────────────────────────────────────
 class AttractLayoutBuilder(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -1067,6 +1185,7 @@ class AttractLayoutBuilder(ctk.CTk):
         self._build_ui()
         self.update_code()
 
+    # ── Styling ───────────────────────────────────────────────────────────────
     def _apply_style(self):
         # ttk styling is still needed for Treeview and Combobox widgets
         # that don't have CTK equivalents.
@@ -1095,40 +1214,166 @@ class AttractLayoutBuilder(ctk.CTk):
         style.map("Rom.Treeview.Heading",
                   background=[("active", COLORS["panel2"])])
 
+    # ── Widget helpers ────────────────────────────────────────────────────────
     def _btn(self, parent, text, cmd, color=None, small=False):
-        # color arg is ignored — all buttons now use the theme palette consistently
-        font_size = 11 if small else 12
-        b = ctk.CTkButton(
+        return ctk.CTkButton(
             parent, text=text, command=cmd,
-            fg_color=COLORS["panel2"],
-            hover_color=COLORS["accent"],
+            fg_color=COLORS["panel2"], hover_color=COLORS["accent"],
             text_color=COLORS["text"],
-            font=ctk.CTkFont(family="Courier", size=font_size,
-                             weight="bold" if not small else "normal"),
-            corner_radius=4,
-            height=28 if small else 32,
+            font=_cfont(11 if small else 12, bold=not small),
+            corner_radius=4, height=28 if small else 32,
         )
-        return b
+
+    def _attach_tooltip(self, widget, text):
+        """Attach a hover tooltip that stays on screen at any window size."""
+        tip_win = [None]
+
+        def _show(e):
+            if tip_win[0]:
+                return
+            tw = tk.Toplevel(widget)
+            tw.wm_overrideredirect(True)
+            tw.attributes("-topmost", True)
+            # Build content first (off-screen) so we can measure it
+            tw.wm_geometry("+0+0")
+            border = tk.Frame(tw, bg=COLORS["accent"], padx=1, pady=1)
+            border.pack()
+            inner = tk.Frame(border, bg=COLORS["panel"], padx=8, pady=5)
+            inner.pack()
+            tk.Label(inner, text=text, bg=COLORS["panel"], fg=COLORS["text"],
+                     font=("Courier", 11), justify="left").pack()
+            tw.update_idletasks()   # force geometry calculation
+
+            tw_w = tw.winfo_reqwidth()
+            tw_h = tw.winfo_reqheight()
+            scr_w = tw.winfo_screenwidth()
+            scr_h = tw.winfo_screenheight()
+
+            # Default: below and right of cursor
+            tx = e.x_root + 12
+            ty = e.y_root + 20
+
+            # Flip left if it would overflow the right edge
+            if tx + tw_w > scr_w - 4:
+                tx = e.x_root - tw_w - 4
+
+            # Flip above if it would overflow the bottom edge
+            if ty + tw_h > scr_h - 4:
+                ty = e.y_root - tw_h - 4
+
+            # Keep on screen
+            tx = max(0, tx)
+            ty = max(0, ty)
+
+            tw.wm_geometry(f"+{tx}+{ty}")
+            tip_win[0] = tw
+
+        def _hide(e):
+            if tip_win[0]:
+                tip_win[0].destroy()
+                tip_win[0] = None
+
+        widget.bind("<Enter>",       _show, add="+")
+        widget.bind("<Leave>",       _hide, add="+")
+        widget.bind("<ButtonPress>", _hide, add="+")
 
     def _build_ui(self):
-        # ── Top bar ──
+        # ── Standard menu bar ─────────────────────────────────────────────────
+        menubar = tk.Menu(self, bg=COLORS["panel"], fg=COLORS["text"],
+                          activebackground=COLORS["accent"],
+                          activeforeground=COLORS["bg"],
+                          relief="flat", bd=0,
+                          font=("Courier", 11))
+        self.configure(menu=menubar)
+
+        def _menu(parent, label):
+            m = tk.Menu(parent, tearoff=0,
+                        bg=COLORS["panel"], fg=COLORS["text"],
+                        activebackground=COLORS["accent"],
+                        activeforeground=COLORS["bg"],
+                        font=("Courier", 11))
+            parent.add_cascade(label=label, menu=m)
+            return m
+
+        # File
+        fm = _menu(menubar, "File")
+        fm.add_command(label="New Layout",        accelerator="Ctrl+N", command=self.clear_all)
+        fm.add_command(label="Load .nut…",        accelerator="Ctrl+O", command=self.load_nut)
+        fm.add_command(label="Save .nut",         accelerator="Ctrl+S", command=self.save_nut)
+        fm.add_separator()
+        fm.add_command(label="Layout Info…",      command=self.show_layout_info)
+        fm.add_separator()
+        fm.add_command(label="▶ Preview in AM+",  command=self.launch_preview)
+        fm.add_separator()
+        fm.add_command(label="Exit",              command=self.quit)
+
+        # Edit
+        em = _menu(menubar, "Edit")
+        em.add_command(label="Duplicate Element", accelerator="Ctrl+D",
+                       command=lambda: self.duplicate_element(self.selected_element))
+        em.add_command(label="Delete Element",    accelerator="Del",
+                       command=lambda: self.delete_element(self.selected_element))
+        em.add_separator()
+        em.add_command(label="Bring Forward",
+                       command=lambda: self.change_zorder(self.selected_element,  1))
+        em.add_command(label="Send Backward",
+                       command=lambda: self.change_zorder(self.selected_element, -1))
+        em.add_separator()
+        em.add_command(label="Clear All Elements", command=self.clear_all)
+
+        # View
+        vm = _menu(menubar, "View")
+        vm.add_command(label="Choose Theme…",     command=self.show_theme_picker)
+        vm.add_separator()
+        vm.add_command(label="Load BG Image…",    command=self._load_bg_image_dialog)
+        vm.add_command(label="Clear BG Image",    command=self._clear_bg_image)
+
+        # Tools  ← advanced / novice-unfriendly items live here
+        tm = _menu(menubar, "Tools")
+        tm.add_command(label="Romlist Editor…",   command=self.show_romlist_editor)
+        tm.add_command(label="CFG Generator…",    command=self._open_tool_window_cfg)
+        tm.add_separator()
+        tm.add_command(label="Reference…",        command=self._open_tool_window_ref)
+        tm.add_command(label="AM+ Docs…",         command=self._open_tool_window_docs)
+        tm.add_separator()
+        tm.add_command(label="Snippet Manager…",  command=self._open_tool_window_snippets)
+
+        # Help
+        hm = _menu(menubar, "Help")
+        hm.add_command(label="Help & Reference",  command=self.show_help)
+        hm.add_command(label="Check for Updates / Website",
+                       command=self.check_for_updates)
+        hm.add_separator()
+        hm.add_command(label=f"About  (v{VERSION})", command=self._show_about)
+
+        # Keyboard shortcuts
+        self.bind_all("<Control-n>", lambda e: self.clear_all())
+        self.bind_all("<Control-o>", lambda e: self.load_nut())
+        self.bind_all("<Control-s>", lambda e: self.save_nut())
+        self.bind_all("<Control-d>", lambda e: self.duplicate_element(self.selected_element))
+
+        # ── Top bar — core actions only ──────────────────────────────────────
         topbar = ctk.CTkFrame(self, fg_color=COLORS["panel"], height=46, corner_radius=0)
         topbar.pack(fill="x", side="top")
         topbar.pack_propagate(False)
 
         ctk.CTkLabel(topbar, text="⚡ ATTRACT-MODE PLUS  LAYOUT DESIGNER",
                      text_color=COLORS["accent"],
-                     font=ctk.CTkFont(family="Courier", size=13, weight="bold")).pack(
+                     font=_cfont(13, bold=True)).pack(
                          side="left", padx=16, pady=10)
 
-        for txt, cmd in [("💾 Save .nut", self.save_nut),
-                         ("📂 Load .nut", self.load_nut),
-                         ("🗑 Clear All", self.clear_all),
-                         ("🎨 Theme",     self.show_theme_picker),
-                         ("📋 Romlist",   self.show_romlist_editor),
-                         ("❓ Help",      self.show_help),
-                         ("🔄 Updates",   self.check_for_updates)]:
-            self._btn(topbar, txt, cmd).pack(side="right", padx=4, pady=6)
+        # Right-to-left: Theme · Preview · Clear · Save · Load
+        topbar_buttons = [
+            ("🎨 Theme",     self.show_theme_picker,  "Choose a colour theme"),
+            ("▶ Preview",    self.launch_preview,     "Launch Attract-Mode Plus with current layout"),
+            ("🗑 Clear",     self.clear_all,           "Remove all elements and reset"),
+            ("💾 Save .nut", self.save_nut,            "Save the current layout.nut  (Ctrl+S)"),
+            ("📂 Load .nut", self.load_nut,            "Load an existing layout.nut  (Ctrl+O)"),
+        ]
+        for txt, cmd, tip in topbar_buttons:
+            b = self._btn(topbar, txt, cmd)
+            b.pack(side="right", padx=4, pady=6)
+            self._attach_tooltip(b, tip)
 
         # ── Resolution bar ──
         resbar = ctk.CTkFrame(self, fg_color=COLORS["panel2"], height=30, corner_radius=0)
@@ -1136,31 +1381,31 @@ class AttractLayoutBuilder(ctk.CTk):
         resbar.pack_propagate(False)
 
         ctk.CTkLabel(resbar, text="W:", text_color=COLORS["text_dim"],
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(side="left", padx=(8, 2))
+                     font=_cfont(11)).pack(side="left", padx=(8, 2))
         self.res_w_var = tk.StringVar(value="1920")
         res_w_entry = ctk.CTkEntry(resbar, textvariable=self.res_w_var, width=60,
                                    fg_color=COLORS["panel"], text_color=COLORS["accent"],
                                    border_color=COLORS["border"],
-                                   font=ctk.CTkFont(family="Courier", size=10))
+                                   font=_cfont(10))
         res_w_entry.pack(side="left", pady=4)
         res_w_entry.bind("<Return>", self._apply_resolution)
         res_w_entry.bind("<FocusOut>", self._apply_resolution)
         self.res_w_var.trace_add("write", lambda *a: self._apply_resolution())
 
         ctk.CTkLabel(resbar, text="H:", text_color=COLORS["text_dim"],
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(side="left", padx=(6, 2))
+                     font=_cfont(11)).pack(side="left", padx=(6, 2))
         self.res_h_var = tk.StringVar(value="1080")
         res_h_entry = ctk.CTkEntry(resbar, textvariable=self.res_h_var, width=60,
                                    fg_color=COLORS["panel"], text_color=COLORS["accent"],
                                    border_color=COLORS["border"],
-                                   font=ctk.CTkFont(family="Courier", size=10))
+                                   font=_cfont(10))
         res_h_entry.pack(side="left", pady=4)
         res_h_entry.bind("<Return>", self._apply_resolution)
         res_h_entry.bind("<FocusOut>", self._apply_resolution)
         self.res_h_var.trace_add("write", lambda *a: self._apply_resolution())
 
         ctk.CTkLabel(resbar, text="Presets:", text_color=COLORS["text_dim"],
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(side="left", padx=(10, 2))
+                     font=_cfont(11)).pack(side="left", padx=(10, 2))
         self.preset_var = tk.StringVar(value="— pick —")
         presets = ["— pick —", "3840x2160", "2560x1440", "1920x1080",
                    "1600x900", "1366x768", "1280x720", "1024x768",
@@ -1172,12 +1417,12 @@ class AttractLayoutBuilder(ctk.CTk):
                                     button_color=COLORS["border"],
                                     dropdown_fg_color=COLORS["panel"],
                                     text_color=COLORS["text"],
-                                    font=ctk.CTkFont(family="Courier", size=11),
+                                    font=_cfont(11),
                                     command=lambda v: self._apply_preset())
         preset_cb.pack(side="left", padx=4, pady=2)
 
         ctk.CTkLabel(resbar, text="Canvas Zoom:", text_color=COLORS["text_dim"],
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(side="left", padx=(16, 4))
+                     font=_cfont(11)).pack(side="left", padx=(16, 4))
         self.zoom_var = tk.DoubleVar(value=0.4)
         zoom_scale = ctk.CTkSlider(resbar, from_=0.1, to=1.0, variable=self.zoom_var,
                                    width=120, progress_color=COLORS["accent"],
@@ -1204,13 +1449,11 @@ class AttractLayoutBuilder(ctk.CTk):
                                   text_color_disabled=COLORS["text_dim"])
         left_nb.pack(fill="both", expand=True)
 
-        for tab_name in ["Elements", "Modules", "Romlist", "CFG Gen", "Snippets"]:
+        for tab_name in ["Elements", "Modules", "Snippets"]:
             left_nb.add(tab_name)
 
         self._build_elements_tab(left_nb.tab("Elements"))
         self._build_modules_tab(left_nb.tab("Modules"))
-        self._build_romlist_tab_stub(left_nb.tab("Romlist"))
-        self._build_cfg_tab(left_nb.tab("CFG Gen"))
         self._build_snippets_tab(left_nb.tab("Snippets"))
 
         # Center: Canvas
@@ -1244,7 +1487,7 @@ class AttractLayoutBuilder(ctk.CTk):
                          text_color=COLORS["text_dim"],
                          fg_color=COLORS["accent"],
                          hover_color=COLORS["accent"],
-                         font=ctk.CTkFont(family="Courier", size=10),
+                         font=_cfont(10),
                          command=lambda: self.canvas.redraw()).pack(side="right", padx=6)
 
         self._btn(canvas_bar, "📂 Load BG Image",
@@ -1271,7 +1514,7 @@ class AttractLayoutBuilder(ctk.CTk):
                                    text_color_disabled=COLORS["text_dim"])
         right_nb.pack(fill="both", expand=True)
 
-        for tab_name in ["Properties", "layout.nut", "Reference", "AM+ Docs"]:
+        for tab_name in ["Properties", "layout.nut"]:
             right_nb.add(tab_name)
 
         # Props tab — scrollable
@@ -1282,14 +1525,8 @@ class AttractLayoutBuilder(ctk.CTk):
         self.props.pack(fill="both", expand=True)
 
         self._build_code_tab(right_nb.tab("layout.nut"))
-        self._build_reference_tab(right_nb.tab("Reference"))
-        self._build_docs_tab(right_nb.tab("AM+ Docs"))
 
-    def _toggle_appearance(self):
-        # Legacy method — theming now handled via show_theme_picker / apply_theme
-        self.show_theme_picker()
-
-
+    # ── Left panel tabs ─────────────────────────────────────────────────────
     def _build_elements_tab(self, parent):
         # Vertical PanedWindow — user can drag the sash to resize both sections
         pane = tk.PanedWindow(parent, orient="vertical",
@@ -1302,10 +1539,10 @@ class AttractLayoutBuilder(ctk.CTk):
         pane.add(top, minsize=120, stretch="always")
 
         ctk.CTkLabel(top, text="◈ ADD ELEMENT", text_color=COLORS["accent"],
-                     font=ctk.CTkFont(family="Courier", size=10, weight="bold")).pack(
+                     font=_cfont(10, bold=True)).pack(
                          anchor="w", padx=8, pady=(8, 4))
 
-        self.new_elem_type = tk.StringVar(value="snap")
+        self.new_elem_type = tk.StringVar(value="")  # no default selection
 
         # ── Element type descriptions for tooltip ─────────────────────────────
         ELEM_DESCS = {
@@ -1349,6 +1586,23 @@ class AttractLayoutBuilder(ctk.CTk):
         type_frame = ctk.CTkScrollableFrame(top, fg_color=COLORS["panel"])
         type_frame.pack(fill="both", expand=True, padx=6)
 
+        # Track row frames by type name so we can update highlights when selection changes
+        self._elem_type_rows = {}
+
+        def _update_row_highlights():
+            sel = self.new_elem_type.get()
+            for etype, (r, rb) in self._elem_type_rows.items():
+                if etype == sel:
+                    r.config(highlightbackground=COLORS["accent"], bg=COLORS["selected"])
+                    for c in r.winfo_children():
+                        try: c.config(bg=COLORS["selected"])
+                        except Exception: pass
+                else:
+                    r.config(highlightbackground=COLORS["panel"], bg=COLORS["panel"])
+                    for c in r.winfo_children():
+                        try: c.config(bg=COLORS["panel"])
+                        except Exception: pass
+
         for et in ELEMENT_TYPES:
             icon = {"snap": "📷", "wheel": "🎡", "boxart": "📦", "marquee": "📺",
                     "video": "▶", "text": "T", "flyer": "🗞", "fanart": "🖼",
@@ -1356,33 +1610,61 @@ class AttractLayoutBuilder(ctk.CTk):
                     "image": "🖼️"}.get(et, "?")
             desc = ELEM_DESCS.get(et, "")
 
-            # Hoverable row frame
             row = tk.Frame(type_frame, bg=COLORS["panel"],
                            highlightthickness=1,
                            highlightbackground=COLORS["panel"],
                            cursor="hand2")
             row.pack(fill="x", pady=2, padx=2)
 
-            rb = ctk.CTkRadioButton(row, text=f"{icon}  {et}",
+            rb = ctk.CTkRadioButton(row, text="",
                                     variable=self.new_elem_type, value=et,
-                                    text_color=COLORS["text"],
-                                    fg_color=COLORS["accent"],
+                                    fg_color=COLORS["panel2"],
                                     hover_color=COLORS["accent"],
-                                    font=ctk.CTkFont(family="Courier", size=13, weight="bold"))
-            rb.pack(side="left", padx=6, pady=4)
+                                    width=20)
+            rb.pack(side="left", padx=(6, 2), pady=4)
 
-            # Click anywhere on the row also selects this type
-            row.bind("<Button-1>", lambda e, v=et: self.new_elem_type.set(v))
+            # Fixed-width icon label so all names line up regardless of emoji width
+            tk.Label(row, text=icon, bg=COLORS["panel"],
+                     font=("Courier", 13), width=2, anchor="center").pack(
+                         side="left", padx=(0, 4))
 
-            for w in (row, rb):
-                w.bind("<Enter>", lambda e, r=row, t=f"{icon}  {et}\n\n{desc}":
-                       (r.config(highlightbackground=COLORS["accent"],
-                                 bg=COLORS["selected"]),
-                        _show_elem_tt(e, t)))
-                w.bind("<Leave>", lambda e, r=row:
-                       (r.config(highlightbackground=COLORS["panel"],
-                                 bg=COLORS["panel"]),
-                        _hide_elem_tt(e)))
+            tk.Label(row, text=et, bg=COLORS["panel"], fg=COLORS["text"],
+                     font=("Courier", 13, "bold"), anchor="w").pack(
+                         side="left")
+
+            self._elem_type_rows[et] = (row, rb)
+
+            def _on_click(e, v=et):
+                self.new_elem_type.set(v)
+                _update_row_highlights()
+
+            def _on_enter(e, r=row, t=f"{icon}  {et}\n\n{desc}", v=et):
+                if self.new_elem_type.get() != v:
+                    r.config(highlightbackground=COLORS["border"], bg=COLORS["panel2"])
+                    for c in r.winfo_children():
+                        try: c.config(bg=COLORS["panel2"])
+                        except Exception: pass
+                _show_elem_tt(e, t)
+
+            def _on_leave(e, r=row, v=et):
+                if self.new_elem_type.get() == v:
+                    r.config(highlightbackground=COLORS["accent"], bg=COLORS["selected"])
+                    for c in r.winfo_children():
+                        try: c.config(bg=COLORS["selected"])
+                        except Exception: pass
+                else:
+                    r.config(highlightbackground=COLORS["panel"], bg=COLORS["panel"])
+                    for c in r.winfo_children():
+                        try: c.config(bg=COLORS["panel"])
+                        except Exception: pass
+                _hide_elem_tt(e)
+
+            for w in [row] + list(row.winfo_children()):
+                w.bind("<Button-1>", _on_click)
+                w.bind("<Enter>",    _on_enter)
+                w.bind("<Leave>",    _on_leave)
+
+        # No type pre-selected — user clicks to choose
 
         self._btn(top, "+ Add Element", self.add_element,
                   color=None).pack(fill="x", padx=6, pady=6)
@@ -1392,7 +1674,7 @@ class AttractLayoutBuilder(ctk.CTk):
         pane.add(bottom, minsize=80, stretch="always")
 
         ctk.CTkLabel(bottom, text="◈ ELEMENT LIST", text_color=COLORS["accent"],
-                     font=ctk.CTkFont(family="Courier", size=10, weight="bold")).pack(
+                     font=_cfont(10, bold=True)).pack(
                          anchor="w", padx=8, pady=(8, 2))
 
         list_frame = tk.Frame(bottom, bg=COLORS["panel"])
@@ -1422,11 +1704,11 @@ class AttractLayoutBuilder(ctk.CTk):
 
     def _build_modules_tab(self, parent):
         ctk.CTkLabel(parent, text="◈ MODULES", text_color=COLORS["accent"],
-                     font=ctk.CTkFont(family="Courier", size=10, weight="bold")).pack(
+                     font=_cfont(10, bold=True)).pack(
                          anchor="w", padx=8, pady=(8, 4))
         ctk.CTkLabel(parent, text="Check to include  ·  hover for info",
                      text_color=COLORS["text_dim"],
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(
+                     font=_cfont(11)).pack(
                          anchor="w", padx=8, pady=(0, 4))
 
         # ── Scrollable module list using CTkScrollableFrame ──
@@ -1472,7 +1754,7 @@ class AttractLayoutBuilder(ctk.CTk):
                                   text_color=COLORS["text"],
                                   fg_color=COLORS["accent"],
                                   hover_color=COLORS["accent"],
-                                  font=ctk.CTkFont(family="Courier", size=13, weight="bold"),
+                                  font=_cfont(13, bold=True),
                                   command=self.update_code)
             cb.pack(side="left", padx=(2, 0), pady=4)
 
@@ -1486,7 +1768,7 @@ class AttractLayoutBuilder(ctk.CTk):
                                  bg=COLORS["panel"]),
                         _hide_tt(e)))
 
-
+    # ── Right panel tabs ────────────────────────────────────────────────────
     def _build_code_tab(self, parent):
         toolbar = tk.Frame(parent, bg=COLORS["panel2"])
         toolbar.pack(fill="x")
@@ -1500,7 +1782,7 @@ class AttractLayoutBuilder(ctk.CTk):
                          text_color=COLORS["text_dim"],
                          fg_color=COLORS["accent"],
                          hover_color=COLORS["accent"],
-                         font=ctk.CTkFont(family="Courier", size=11),
+                         font=_cfont(11),
                          command=self._on_auto_update_toggle).pack(side="right", padx=6)
 
         sb_y = tk.Scrollbar(parent, orient="vertical")
@@ -1528,6 +1810,7 @@ class AttractLayoutBuilder(ctk.CTk):
 
     # ── Actions ──────────────────────────────────────────────────────────────
 
+    # ── Element operations ──────────────────────────────────────────────────
     def add_element(self):
         etype = self.new_elem_type.get()
         count = sum(1 for e in self.layout["elements"] if e.type == etype)
@@ -1609,6 +1892,7 @@ class AttractLayoutBuilder(ctk.CTk):
             self.select_element(sorted_elems[idx])
             self.canvas.redraw()
 
+    # ── Canvas / resolution helpers ─────────────────────────────────────────
     def _apply_resolution(self, event=None):
         try:
             w = int(self.res_w_var.get())
@@ -1638,6 +1922,7 @@ class AttractLayoutBuilder(ctk.CTk):
 
     # ── Background reference image ─────────────────────────────────────────────
 
+    # ── Background image ────────────────────────────────────────────────────
     def _load_bg_image(self, path):
         """Load an image file as the canvas background reference."""
         try:
@@ -1696,25 +1981,47 @@ class AttractLayoutBuilder(ctk.CTk):
             raw = raw[1:-1]
         path = raw.split("} {")[0].strip()
         ext = os.path.splitext(path)[1].lower()
-        if ext not in (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"):
-            messagebox.showinfo("Unsupported File",
-                                f"Please drop a PNG or JPG image.\n\nGot: {ext}")
-            return
 
-        # If a static image element is selected — assign the image to it
+        IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
+        VIDEO_EXTS = {".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv"}
+        VISUAL_TYPES = {"snap", "video", "boxart", "marquee", "wheel",
+                        "flyer", "fanart", "artwork", "surface", "image"}
+
         sel = self.selected_element
-        if sel and sel.type == "image":
-            sel.image_path = path
-            self.props._img_path_var.set(path)
-            old = [k for k in self.canvas._img_cache if k[0] == id(sel)]
-            for k in old:
-                del self.canvas._img_cache[k]
-            self.update_code()
-            self.canvas.redraw()
-        else:
-            # Otherwise load as background reference
-            self._load_bg_image(path)
 
+        if ext in IMAGE_EXTS or ext in VIDEO_EXTS:
+            if sel and sel.type in VISUAL_TYPES:
+                # Assign to the selected element as a preview
+                if sel.type == "image":
+                    if ext in IMAGE_EXTS:
+                        sel.image_path = path
+                        self.props._img_path_var.set(path)
+                    else:
+                        messagebox.showinfo("Image only",
+                                            "The image element only supports PNG/JPG files.")
+                        return
+                else:
+                    sel.preview_path = path
+                    # Update the preview path field in properties if visible
+                    if hasattr(self.props, "_preview_path_var"):
+                        self.props._preview_path_var.set(path)
+
+                # Invalidate cache and redraw
+                for k in [k for k in self.canvas._img_cache if k[0] == id(sel)]:
+                    del self.canvas._img_cache[k]
+                self.update_code()
+                self.canvas.redraw()
+            else:
+                # No matching element selected — load as background reference
+                if ext in IMAGE_EXTS:
+                    self._load_bg_image(path)
+                else:
+                    messagebox.showinfo("No element selected",
+                                        "Select a snap, video, boxart, marquee, wheel, "
+                                        "flyer, fanart, or artwork element first,\n"
+                                        "then drop the video onto it.")
+
+    # ── Code generation ─────────────────────────────────────────────────────
     def generate_nut(self):
         import datetime
         lines = []
@@ -1760,7 +2067,8 @@ class AttractLayoutBuilder(ctk.CTk):
         lines.append("")
 
         # ── Layout size (user-controlled W/H) ────────────────────────────────
-        lines.append("// Layout Size")
+        lines.append("# Layout Size")
+        lines.append("")
         lines.append(f"fe.layout.width={lw};")
         lines.append(f"fe.layout.height={lh};")
         lines.append("local my_config = fe.get_config();")
@@ -1776,14 +2084,15 @@ class AttractLayoutBuilder(ctk.CTk):
         # ── Modules ───────────────────────────────────────────────────────────
         active_mods = [name for name, v in self.module_vars.items() if v.get()]
         if active_mods:
-            lines.append("// ── Modules ──────────────────────────────────────")
+            lines.append("# Modules")
+            lines.append("")
             for name in active_mods:
                 lines.append(f'fe.load_module("{name}");')
             lines.append("")
 
         # ── Visual elements (from canvas) ─────────────────────────────────────
         if self.layout["elements"]:
-            lines.append("// ── Layout Elements ──────────────────────────────")
+            lines.append("# Layout Elements")
             sorted_elems = sorted(self.layout["elements"], key=lambda e: e.zorder)
             for elem in sorted_elems:
                 lines.append(f"\n// {elem.type.upper()} · {elem.name}")
@@ -1793,16 +2102,17 @@ class AttractLayoutBuilder(ctk.CTk):
         # ── Inserted snippets (preserved across updates) ──────────────────────
         snippets = self.layout.get("snippets", [])
         if snippets:
-            lines.append("// ── Snippets ─────────────────────────────────────")
+            lines.append("# Snippets")
             for snip in snippets:
                 lines.append("")
                 lines.append(f"// snippet: {snip['name']}")
                 lines.append(snip["code"])
 
         lines.append("")
-        lines.append("// ── End of layout ────────────────────────────────")
+        lines.append("# End of layout")
         return "\n".join(lines)
 
+    # ── Code editor ─────────────────────────────────────────────────────────
     def update_code(self):
         if not self.auto_update_var.get() if hasattr(self, "auto_update_var") else False:
             return
@@ -1852,6 +2162,7 @@ class AttractLayoutBuilder(ctk.CTk):
         if self.auto_update_var.get():
             self._regen_code()
 
+    # ── File I/O ─────────────────────────────────────────────────────────────
     def copy_code(self):
         code = self.code_text.get("1.0", tk.END)
         self.clipboard_clear()
@@ -1896,6 +2207,7 @@ class AttractLayoutBuilder(ctk.CTk):
             self.update_code()
             self.canvas.redraw()
 
+    # ── Snippets ─────────────────────────────────────────────────────────────
     def _build_snippets_tab(self, parent):
         import os
 
@@ -1933,7 +2245,7 @@ class AttractLayoutBuilder(ctk.CTk):
             b = ctk.CTkButton(cat_frame, text=cat, width=46, height=22,
                                fg_color=COLORS["panel2"], hover_color=COLORS["accent"],
                                text_color=COLORS["text_dim"],
-                               font=ctk.CTkFont(family="Courier", size=11),
+                               font=_cfont(11),
                                corner_radius=3,
                                command=lambda c=cat: self._snip_set_filter(c))
             b.pack(side="left", padx=2, pady=2)
@@ -1947,14 +2259,13 @@ class AttractLayoutBuilder(ctk.CTk):
                  font=("Courier", 11)).pack(side="left", padx=4)
         self._snip_search_var = tk.StringVar()
         ctk.CTkEntry(sf, textvariable=self._snip_search_var,
-                     fg_color=COLORS["panel2"], text_color=COLORS["text"],
-                     border_color=COLORS["border"], height=24,
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(
+                     **_ENTRY_KW, height=24,
+                     font=_cfont(11)).pack(
                          side="left", fill="x", expand=True, pady=3)
         ctk.CTkButton(sf, text="✕", width=24, height=22,
                        fg_color=COLORS["panel2"], hover_color=COLORS["border"],
                        text_color=COLORS["text_dim"],
-                       font=ctk.CTkFont(family="Courier", size=11),
+                       font=_cfont(11),
                        command=lambda: self._snip_search_var.set("")).pack(side="right", padx=4)
         self._snip_search_var.trace_add("write", lambda *a: self._snip_populate())
 
@@ -2273,7 +2584,7 @@ class AttractLayoutBuilder(ctk.CTk):
         ctk.CTkEntry(nf, textvariable=name_var,
                       fg_color=COLORS["panel2"], text_color=COLORS["text"],
                       border_color=COLORS["border"], width=320, height=28,
-                      font=ctk.CTkFont(family="Courier", size=10)).pack(side="left", padx=8)
+                      font=_cfont(10)).pack(side="left", padx=8)
 
         # Code editor label
         tk.Label(win, text="Code:", bg=COLORS["bg"],
@@ -2441,7 +2752,7 @@ class AttractLayoutBuilder(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Error", f"Could not open file:\n{e}")
 
-
+    # ── CFG Generator ───────────────────────────────────────────────────────
     def _build_cfg_tab(self, parent):
         # ── System data ───────────────────────────────────────────────────────
         MAME_SYSTEMS = [
@@ -2598,7 +2909,7 @@ class AttractLayoutBuilder(ctk.CTk):
                                  button_color=COLORS["border"],
                                  dropdown_fg_color=COLORS["panel"],
                                  text_color=COLORS["text"],
-                                 font=ctk.CTkFont(family="Courier", size=10),
+                                 font=_cfont(10),
                                  command=lambda v: _on_emu_change())
             cb.pack(side="left")
         _row("Emulator:", _make_emu)
@@ -2612,7 +2923,7 @@ class AttractLayoutBuilder(ctk.CTk):
                                                button_color=COLORS["border"],
                                                dropdown_fg_color=COLORS["panel"],
                                                text_color=COLORS["text"],
-                                               font=ctk.CTkFont(family="Courier", size=10),
+                                               font=_cfont(10),
                                                command=lambda v: _on_sys_change())
             self._cfg_sys_cb.pack(side="left")
         _row("System:", _make_sys)
@@ -2622,7 +2933,7 @@ class AttractLayoutBuilder(ctk.CTk):
             ctk.CTkEntry(f, textvariable=self._cfg_ext_var,
                          fg_color=COLORS["panel2"], text_color=COLORS["text"],
                          border_color=COLORS["border"], width=200, height=28,
-                         font=ctk.CTkFont(family="Courier", size=10)).pack(side="left")
+                         font=_cfont(10)).pack(side="left")
         _row("ROM Extensions:", _make_ext)
 
         # ── Other: exe + args (hidden by default) ────────────────────────────
@@ -2631,12 +2942,12 @@ class AttractLayoutBuilder(ctk.CTk):
             ctk.CTkEntry(f, textvariable=self._cfg_exec_var,
                          fg_color=COLORS["panel2"], text_color=COLORS["text"],
                          border_color=COLORS["border"], width=230, height=28,
-                         font=ctk.CTkFont(family="Courier", size=10)).pack(side="left"))
+                         font=_cfont(10)).pack(side="left"))
         self._cfg_args_frame = _row("Arguments:", lambda f:
             ctk.CTkEntry(f, textvariable=self._cfg_args_var,
                          fg_color=COLORS["panel2"], text_color=COLORS["text"],
                          border_color=COLORS["border"], width=230, height=28,
-                         font=ctk.CTkFont(family="Courier", size=10)).pack(side="left"))
+                         font=_cfont(10)).pack(side="left"))
 
         # ── Logic callbacks ───────────────────────────────────────────────────
         def _update_preview(*_):
@@ -2690,7 +3001,7 @@ class AttractLayoutBuilder(ctk.CTk):
                              text_color=COLORS["text"],
                              fg_color=COLORS["accent"],
                              hover_color=COLORS["accent"],
-                             font=ctk.CTkFont(family="Courier", size=11),
+                             font=_cfont(11),
                              command=_update_preview).grid(
                                  row=row, column=col, sticky="w", padx=12, pady=2)
 
@@ -2715,9 +3026,8 @@ class AttractLayoutBuilder(ctk.CTk):
                  font=("Courier", 11), anchor="w", width=18).pack(side="left")
         self._cfg_nb_wait_var = tk.StringVar(value="")
         ctk.CTkEntry(nf, textvariable=self._cfg_nb_wait_var,
-                     fg_color=COLORS["panel2"], text_color=COLORS["text"],
-                     border_color=COLORS["border"],
-                     font=ctk.CTkFont(family="Courier", size=11),
+                     **_ENTRY_KW,
+                     font=_cfont(11),
                      placeholder_text="e.g.  10",
                      height=28).pack(side="left", fill="x", expand=True, padx=(8, 0))
         self._cfg_nb_wait_var.trace_add("write", _update_preview)
@@ -2730,9 +3040,8 @@ class AttractLayoutBuilder(ctk.CTk):
                  font=("Courier", 11), anchor="w", width=18).pack(side="left")
         self._cfg_import_extras_var = tk.StringVar(value="")
         ctk.CTkEntry(ef, textvariable=self._cfg_import_extras_var,
-                     fg_color=COLORS["panel2"], text_color=COLORS["text"],
-                     border_color=COLORS["border"],
-                     font=ctk.CTkFont(family="Courier", size=11),
+                     **_ENTRY_KW,
+                     font=_cfont(11),
                      placeholder_text="e.g.  $PROGDIR\\extras\\extras.txt",
                      height=28).pack(side="left", fill="x", expand=True, padx=(8, 0))
         self._cfg_import_extras_var.trace_add("write", _update_preview)
@@ -2795,7 +3104,7 @@ class AttractLayoutBuilder(ctk.CTk):
                 fg_color=COLORS["panel2"],
                 hover_color=COLORS["accent"],
                 text_color=COLORS["text"],
-                font=ctk.CTkFont(family="Courier", size=11),
+                font=_cfont(11),
                 corner_radius=4, height=28,
                 command=lambda u=url: webbrowser.open(u))
             b.grid(row=row_idx, column=col_idx,
@@ -2921,27 +3230,6 @@ class AttractLayoutBuilder(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Save Error", str(e))
 
-
-    def _build_romlist_tab_stub(self, parent):
-        """Slim placeholder in the left panel — directs user to the popup editor."""
-        ctk.CTkLabel(parent, text="◈ ROMLIST EDITOR",
-                     text_color=COLORS["accent"],
-                     font=ctk.CTkFont(family="Courier", size=13, weight="bold")).pack(
-                         anchor="w", padx=12, pady=(20, 8))
-        ctk.CTkLabel(parent,
-                     text="Open the full Romlist Editor\nin its own window.",
-                     text_color=COLORS["text_dim"],
-                     font=ctk.CTkFont(family="Courier", size=11),
-                     justify="left").pack(anchor="w", padx=12, pady=(0, 16))
-        self._btn(parent, "📋 Open Romlist Editor",
-                  self.show_romlist_editor).pack(fill="x", padx=12, pady=4)
-
-        ctk.CTkLabel(parent,
-                     text="Or click  📋 Romlist  in the\ntop toolbar at any time.",
-                     text_color=COLORS["text_dim"],
-                     font=ctk.CTkFont(family="Courier", size=11),
-                     justify="left").pack(anchor="w", padx=12, pady=(16, 0))
-
     def show_romlist_editor(self):
         """Open the Romlist Editor in its own resizable window."""
         win = ctk.CTkToplevel(self)
@@ -2954,6 +3242,7 @@ class AttractLayoutBuilder(ctk.CTk):
         # Build the full romlist UI inside this window
         self._build_romlist_tab(win)
 
+    # ── Romlist Editor ──────────────────────────────────────────────────────
     def _build_romlist_tab(self, parent):
         self._rom_current_file = ""
         self._rom_header = []
@@ -2990,7 +3279,7 @@ class AttractLayoutBuilder(ctk.CTk):
         ctk.CTkEntry(hf, textvariable=self._rom_header_var, state="disabled",
                      fg_color=COLORS["panel2"], text_color=COLORS["text_dim"],
                      border_color=COLORS["border"], height=22,
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(
+                     font=_cfont(11)).pack(
                          side="left", fill="x", expand=True, padx=4)
 
         # ── Search bar ───────────────────────────────────────────────────────
@@ -3000,14 +3289,13 @@ class AttractLayoutBuilder(ctk.CTk):
                  font=("Courier", 11)).pack(side="left", padx=4)
         self._rom_search_var = tk.StringVar()
         ctk.CTkEntry(sf, textvariable=self._rom_search_var,
-                     fg_color=COLORS["panel2"], text_color=COLORS["text"],
-                     border_color=COLORS["border"], height=24,
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(
+                     **_ENTRY_KW, height=24,
+                     font=_cfont(11)).pack(
                          side="left", fill="x", expand=True, pady=3)
         ctk.CTkButton(sf, text="✕", width=24, height=22,
                        fg_color=COLORS["panel2"], hover_color=COLORS["border"],
                        text_color=COLORS["text_dim"],
-                       font=ctk.CTkFont(family="Courier", size=11),
+                       font=_cfont(11),
                        command=lambda: self._rom_search_var.set("")).pack(side="right", padx=4)
         self._rom_search_var.trace_add("write", lambda *a: self._rom_apply_search())
 
@@ -3182,7 +3470,7 @@ class AttractLayoutBuilder(ctk.CTk):
         entry = ctk.CTkEntry(popup, textvariable=var,
                               fg_color=COLORS["panel2"], text_color=COLORS["text"],
                               border_color=COLORS["accent"], border_width=1,
-                              font=ctk.CTkFont(family="Courier", size=11))
+                              font=_cfont(11))
         entry.pack(fill="both", expand=True)
         entry._entry.select_range(0, tk.END)
         entry._entry.focus_set()
@@ -3224,7 +3512,7 @@ class AttractLayoutBuilder(ctk.CTk):
 
         ctk.CTkLabel(win, text="◈ BULK EDIT COLUMN",
                       text_color=COLORS["accent"],
-                      font=ctk.CTkFont(family="Courier", size=10, weight="bold")).pack(
+                      font=_cfont(10, bold=True)).pack(
                           anchor="w", padx=12, pady=(12, 4))
 
         tf = tk.Frame(win, bg=COLORS["bg"])
@@ -3236,7 +3524,7 @@ class AttractLayoutBuilder(ctk.CTk):
                          state="readonly", width=200,
                          fg_color=COLORS["panel2"], button_color=COLORS["border"],
                          dropdown_fg_color=COLORS["panel"], text_color=COLORS["text"],
-                         font=ctk.CTkFont(family="Courier", size=11)).pack(side="left", padx=4)
+                         font=_cfont(11)).pack(side="left", padx=4)
 
         vf = tk.Frame(win, bg=COLORS["bg"])
         vf.pack(fill="x", padx=12, pady=6)
@@ -3246,7 +3534,7 @@ class AttractLayoutBuilder(ctk.CTk):
         ctk.CTkEntry(vf, textvariable=val_var,
                       fg_color=COLORS["panel2"], text_color=COLORS["text"],
                       border_color=COLORS["border"], width=200, height=28,
-                      font=ctk.CTkFont(family="Courier", size=11)).pack(side="left", padx=4)
+                      font=_cfont(11)).pack(side="left", padx=4)
 
         def _apply():
             col_name = col_var.get()
@@ -3319,7 +3607,7 @@ class AttractLayoutBuilder(ctk.CTk):
             command=lambda c=col: self._rom_sort_by(c, not reverse))
         self._rom_status_var.set(f"Sorted by '{col}' {'▲' if not reverse else '▼'}")
 
-
+    # ── Reference tab ────────────────────────────────────────────────────────
     def _build_reference_tab(self, parent):
         REFERENCE = {
             "AM+ fe.* API": [
@@ -3463,7 +3751,7 @@ class AttractLayoutBuilder(ctk.CTk):
         # ── UI ──────────────────────────────────────────────────────────────
         ctk.CTkLabel(parent, text="◈ SQUIRREL & AM+ REFERENCE",
                       text_color=COLORS["accent"],
-                      font=ctk.CTkFont(family="Courier", size=10, weight="bold")).pack(
+                      font=_cfont(10, bold=True)).pack(
                           anchor="w", padx=8, pady=(8, 2))
 
         # Search bar
@@ -3475,12 +3763,12 @@ class AttractLayoutBuilder(ctk.CTk):
         ctk.CTkEntry(sf, textvariable=self.ref_search_var,
                       fg_color=COLORS["panel2"], text_color=COLORS["text"],
                       border_color=COLORS["border"], height=26,
-                      font=ctk.CTkFont(family="Courier", size=10)).pack(
+                      font=_cfont(10)).pack(
                           side="left", fill="x", expand=True, pady=3)
         ctk.CTkButton(sf, text="✕", width=24, height=22,
                        fg_color=COLORS["panel2"], hover_color=COLORS["border"],
                        text_color=COLORS["text_dim"],
-                       font=ctk.CTkFont(family="Courier", size=11),
+                       font=_cfont(11),
                        command=lambda: self.ref_search_var.set("")).pack(side="right", padx=4)
 
         # Horizontal split: list | detail
@@ -3619,7 +3907,7 @@ class AttractLayoutBuilder(ctk.CTk):
             self.code_text.insert(pos, "\n" + self._ref_current_code + "\n")
             self._highlight_code()
 
-
+    # ── AM+ Docs tab ─────────────────────────────────────────────────────────
     def _build_docs_tab(self, parent):
         """
         Loads Layouts.md from the same folder as this script and presents it
@@ -3649,12 +3937,12 @@ class AttractLayoutBuilder(ctk.CTk):
         ctk.CTkEntry(sf, textvariable=self._docs_search_var,
                       fg_color=COLORS["panel2"], text_color=COLORS["text"],
                       border_color=COLORS["border"], height=26,
-                      font=ctk.CTkFont(family="Courier", size=10)).pack(
+                      font=_cfont(10)).pack(
                           side="left", fill="x", expand=True, pady=3)
         ctk.CTkButton(sf, text="✕", width=24, height=22,
                        fg_color=COLORS["panel2"], hover_color=COLORS["border"],
                        text_color=COLORS["text_dim"],
-                       font=ctk.CTkFont(family="Courier", size=11),
+                       font=_cfont(11),
                        command=lambda: self._docs_search_var.set("")).pack(side="right", padx=4)
         self._docs_search_var.trace_add("write", lambda *a: self._docs_apply_search())
 
@@ -3945,9 +4233,9 @@ class AttractLayoutBuilder(ctk.CTk):
                 self.clipboard_append(body)
                 self._docs_status_var.set("Section copied to clipboard")
 
-
     # ── Attract-Mode Preview ──────────────────────────────────────────────────
 
+    # ── Preview / Launch ────────────────────────────────────────────────────
     def _attract_cfg_path(self):
         """Path to the small config file that stores the attract.exe location."""
         base = os.path.dirname(os.path.abspath(__file__))
@@ -4072,7 +4360,7 @@ class AttractLayoutBuilder(ctk.CTk):
 
         ctk.CTkLabel(win, text="◈ PREVIEW SETUP",
                      text_color=COLORS["accent"],
-                     font=ctk.CTkFont(family="Courier", size=13, weight="bold")).pack(
+                     font=_cfont(13, bold=True)).pack(
                          anchor="w", padx=18, pady=(16, 4))
 
         ctk.CTkLabel(win,
@@ -4084,7 +4372,7 @@ class AttractLayoutBuilder(ctk.CTk):
                          "Option B — browse to attractplus.exe anywhere on your machine."
                      ),
                      text_color=COLORS["text"],
-                     font=ctk.CTkFont(family="Courier", size=11),
+                     font=_cfont(11),
                      justify="left").pack(anchor="w", padx=18, pady=(0, 12))
 
         path_var = tk.StringVar(value=self._attract_exe or "")
@@ -4092,9 +4380,8 @@ class AttractLayoutBuilder(ctk.CTk):
         path_frame = tk.Frame(win, bg=COLORS["bg"])
         path_frame.pack(fill="x", padx=18, pady=(0, 8))
         ctk.CTkEntry(path_frame, textvariable=path_var,
-                     fg_color=COLORS["panel2"], text_color=COLORS["text"],
-                     border_color=COLORS["border"],
-                     font=ctk.CTkFont(family="Courier", size=11),
+                     **_ENTRY_KW,
+                     font=_cfont(11),
                      height=30).pack(side="left", fill="x", expand=True, padx=(0, 6))
         self._btn(path_frame, "Browse…",
                   lambda: path_var.set(
@@ -4123,13 +4410,14 @@ class AttractLayoutBuilder(ctk.CTk):
             side="left", padx=8)
         self._btn(btn_row, "✕ Cancel", win.destroy, small=True).pack(side="left", padx=4)
 
+    # ── Dialogs ─────────────────────────────────────────────────────────────
     def show_layout_info(self):
         """Dialog to set metadata written into the layout.nut file header."""
         import datetime
 
         win = ctk.CTkToplevel(self)
         win.title("Layout Info")
-        win.geometry("500x370")
+        win.geometry("500x450")
         win.resizable(False, False)
         win.transient(self)
         win.grab_set()
@@ -4137,12 +4425,12 @@ class AttractLayoutBuilder(ctk.CTk):
 
         ctk.CTkLabel(win, text="◈ LAYOUT INFO",
                      text_color=COLORS["accent"],
-                     font=ctk.CTkFont(family="Courier", size=13, weight="bold")).pack(
+                     font=_cfont(13, bold=True)).pack(
                          anchor="w", padx=18, pady=(16, 2))
         ctk.CTkLabel(win,
                      text="These details are written into the header comment of layout.nut.",
                      text_color=COLORS["text_dim"],
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(
+                     font=_cfont(11)).pack(
                          anchor="w", padx=18, pady=(0, 12))
 
         def _field(label, var, placeholder=""):
@@ -4153,7 +4441,7 @@ class AttractLayoutBuilder(ctk.CTk):
             e = ctk.CTkEntry(f, textvariable=var,
                              fg_color=COLORS["panel2"], text_color=COLORS["text"],
                              border_color=COLORS["border"],
-                             font=ctk.CTkFont(family="Courier", size=12),
+                             font=_cfont(12),
                              placeholder_text=placeholder,
                              height=30)
             e.pack(side="left", fill="x", expand=True)
@@ -4169,14 +4457,13 @@ class AttractLayoutBuilder(ctk.CTk):
         tk.Label(df, text="Date", bg=COLORS["bg"], fg=COLORS["text_dim"],
                  font=("Courier", 11), width=14, anchor="w").pack(side="left")
         ctk.CTkEntry(df, textvariable=self._meta_date,
-                     fg_color=COLORS["panel2"], text_color=COLORS["text"],
-                     border_color=COLORS["border"],
-                     font=ctk.CTkFont(family="Courier", size=12),
+                     **_ENTRY_KW,
+                     font=_cfont(12),
                      placeholder_text="Leave blank for today's date",
                      height=30).pack(side="left", fill="x", expand=True, padx=(0, 6))
         self._btn(df, "Today",
                   lambda: self._meta_date.set(
-                      datetime.date.today().strftime("%Y-%m-%d")),
+                      datetime.date.today().strftime("%m-%d-%Y")),
                   small=True).pack(side="left")
 
         _field("Notes",        self._meta_notes,         "e.g.  16:9 widescreen layout")
@@ -4225,10 +4512,66 @@ class AttractLayoutBuilder(ctk.CTk):
         self._btn(btn_row, "✓ Apply & Regenerate", _apply).pack(side="left", padx=8)
         self._btn(btn_row, "✕ Close", win.destroy, small=True).pack(side="left", padx=4)
 
+    # ── Updates & tools ─────────────────────────────────────────────────────
     def check_for_updates(self):
         import webbrowser
         webbrowser.open(UPDATE_URL)
 
+    def _open_tool_window(self, title, builder, width=900, height=700):
+        win = ctk.CTkToplevel(self)
+        win.title(title)
+        win.geometry(f"{width}x{height}")
+        win.resizable(True, True)
+        win.configure(fg_color=COLORS["panel"])
+        win.after(50, win.lift)
+        builder(win)
+        return win
+
+    def _open_tool_window_cfg(self):
+        self._open_tool_window("CFG Generator",    self._build_cfg_tab,       width=760, height=740)
+
+    def _open_tool_window_ref(self):
+        self._open_tool_window("Reference",        self._build_reference_tab, width=860, height=680)
+
+    def _open_tool_window_docs(self):
+        self._open_tool_window("AM+ Docs",         self._build_docs_tab,      width=860, height=680)
+
+    def _open_tool_window_snippets(self):
+        self._open_tool_window("Snippet Manager",  self._build_snippets_tab,  width=760, height=700)
+
+    def _show_about(self):
+        import webbrowser
+        win = ctk.CTkToplevel(self)
+        win.title("About")
+        win.geometry("420x240")
+        win.resizable(False, False)
+        win.configure(fg_color=COLORS["panel"])
+        win.transient(self)
+        win.grab_set()
+        win.after(50, win.lift)
+        ctk.CTkLabel(win, text="⚡ ATTRACT-MODE PLUS",
+                     text_color=COLORS["accent"],
+                     font=_cfont(15, bold=True),
+                     fg_color=COLORS["panel"]).pack(pady=(22, 2))
+        ctk.CTkLabel(win, text="Layout Designer",
+                     text_color=COLORS["text"],
+                     font=_cfont(13),
+                     fg_color=COLORS["panel"]).pack()
+        ctk.CTkLabel(win, text=f"Version {VERSION}",
+                     text_color=COLORS["text_dim"],
+                     font=_cfont(11),
+                     fg_color=COLORS["panel"]).pack(pady=(6, 0))
+        ctk.CTkLabel(win,
+                     text="Built with ❤ by JJTheKing\nAI: Claude & DeepSeek Snippets: Tankman3737\n Feedback: Oomek, Chadnaut, PaCiFikbAllA",
+                     text_color=COLORS["text_dim"],
+                     font=_cfont(11),
+                     fg_color=COLORS["panel"], justify="center").pack(pady=(12, 10))
+        btn_row = tk.Frame(win, bg=COLORS["panel"])
+        btn_row.pack()
+        self._btn(btn_row, "🌐 Website", lambda: webbrowser.open(UPDATE_URL), small=True).pack(side="left", padx=6)
+        self._btn(btn_row, "Close", win.destroy, small=True).pack(side="left", padx=6)
+
+    # ── Theme picker ────────────────────────────────────────────────────────
     def show_theme_picker(self):
         win = ctk.CTkToplevel(self)
         win.title("Choose Theme")
@@ -4242,12 +4585,12 @@ class AttractLayoutBuilder(ctk.CTk):
         ctk.CTkLabel(win, text="◈ CHOOSE THEME",
                      fg_color=COLORS["panel"],
                      text_color=COLORS["accent"],
-                     font=ctk.CTkFont(family="Courier", size=12, weight="bold")).pack(
+                     font=_cfont(12, bold=True)).pack(
                          padx=20, pady=(14, 2))
         ctk.CTkLabel(win, text="Select a colour scheme for the interface.",
                      fg_color=COLORS["panel"],
                      text_color=COLORS["text_dim"],
-                     font=ctk.CTkFont(family="Courier", size=11)).pack(padx=20, pady=(0, 10))
+                     font=_cfont(11)).pack(padx=20, pady=(0, 10))
 
         # ── Scrollable area ───────────────────────────────────────────────────
         scroll = ctk.CTkScrollableFrame(win,
@@ -4313,8 +4656,7 @@ class AttractLayoutBuilder(ctk.CTk):
         self.update_code()
         self.canvas.redraw()
 
-
-
+    # ── Help ────────────────────────────────────────────────────────────────
     def show_help(self):
         help_text = """ATTRACT-MODE PLUS — LAYOUT DESIGNER  HELP
 ═══════════════════════════════════════════════════════
@@ -4431,10 +4773,11 @@ OUTPUT
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Thanks: Claude & Deepseek AI  ·  JJTheKing
-          Tankman3737 (Wheel Code Snippets)
+          Tankman3737 (Code Snippets)
           Oomek         - Feedback
+          Chadnaut      - Feedback
           PaCiFiKbAllA  - Feedback
-          Version 5.9 (05/21/2026)
+          Version 6.5 (05/30/2026)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
         win = ctk.CTkToplevel(self)
@@ -4477,8 +4820,9 @@ OUTPUT
         t.config(state="disabled")
 
 
-# ─── Entry Point ──────────────────────────────────────────────────────────────
 
+
+# ─── ENTRY POINT ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     # Try to use TkinterDnD for native file drag-and-drop onto the canvas.
     # If tkinterdnd2 isn't installed, everything still works — just use the
