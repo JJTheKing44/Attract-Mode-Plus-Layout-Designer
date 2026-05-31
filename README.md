@@ -5,6 +5,8 @@
 A visual drag-and-drop layout builder for **Attract-Mode Plus** frontends.  
 Build, preview, and export `layout.nut` files without writing Squirrel script by hand.
 
+**Version 6.5**
+
 ---
 
 ## Requirements
@@ -13,12 +15,6 @@ Build, preview, and export `layout.nut` files without writing Squirrel script by
 Windows 10/11
 ```
 
-| Package | Purpose |
-|---|---|
-| `customtkinter` | Modern CTK UI widgets |
-| `pillow` | Background reference images + image element rendering |
-| `tkinterdnd2` | Drag-and-drop PNG/JPG files onto the canvas *(optional — button fallback included)* |
-
 Run with:
 ```
 Attract-Mode Plus - Layout Designer-TKK.exe
@@ -26,16 +22,94 @@ Attract-Mode Plus - Layout Designer-TKK.exe
 
 ---
 
-## Top Toolbar
+## Interface Overview
 
-| Button | Action |
+The app has three zones:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Menu bar:  File · Edit · View · Tools · Help                   │
+│  Toolbar:   Load · Save · Clear · Preview · Theme               │
+│  Res bar:   W · H · Presets · Zoom                              │
+├──────────────┬──────────────────────────────┬───────────────────┤
+│  Left panel  │       Canvas (preview)        │   Right panel     │
+│  Elements    │                               │   Properties      │
+│  Modules     │                               │   layout.nut      │
+│  Snippets    │                               │                   │
+└──────────────┴──────────────────────────────┴───────────────────┘
+```
+
+---
+
+## Menu Bar
+
+### File
+| Item | Shortcut | Action |
+|---|---|---|
+| New Layout | `Ctrl+N` | Clear all elements and reset |
+| Load .nut… | `Ctrl+O` | Load an existing layout.nut file |
+| Save .nut | `Ctrl+S` | Save the current layout code |
+| Layout Info… | | Set name, author, version, date, notes for the file header |
+| ▶ Preview in AM+ | | Launch Attract-Mode Plus with the current layout |
+| Exit | | Close the application |
+
+### Edit
+| Item | Shortcut | Action |
+|---|---|---|
+| Duplicate Element | `Ctrl+D` | Clone the selected element |
+| Delete Element | `Del` | Remove the selected element |
+| Bring Forward | | Increase z-order by 1 |
+| Send Backward | | Decrease z-order by 1 |
+| Clear All Elements | | Remove everything from the canvas |
+
+### View
+| Item | Action |
 |---|---|
-| 💾 Save .nut | Save the current layout.nut code |
-| 📂 Load .nut | Load an existing layout.nut file |
-| 🗑 Clear All | Remove all elements and reset the layout |
-| 🎨 Theme | Choose a colour theme |
-| 📋 Romlist | Open the Romlist Editor in its own window |
-| ❓ Help | Open the built-in help reference |
+| Choose Theme… | Open the theme picker |
+| Load BG Image… | Load a PNG/JPG as a canvas reference image |
+| Clear BG Image | Remove the background reference image |
+
+### Tools  *(advanced features — hidden from novices)*
+| Item | Action |
+|---|---|
+| Romlist Editor… | Full romlist editor in its own window |
+| CFG Generator… | Emulator config generator |
+| Reference… | Squirrel + AM+ API reference |
+| AM+ Docs… | Renders Layouts.md from your AM+ install |
+| Snippet Manager… | Browse and insert reusable code snippets |
+
+### Help
+| Item | Action |
+|---|---|
+| Help & Reference | Built-in help popup |
+| Check for Updates / Website | Opens the project website |
+| About | Version, credits, website link |
+
+---
+
+## Toolbar
+
+Five core buttons always visible at the top:
+
+| Button | Shortcut | Action |
+|---|---|---|
+| 📂 Load .nut | `Ctrl+O` | Load a layout file |
+| 💾 Save .nut | `Ctrl+S` | Save the layout code |
+| 🗑 Clear | | Remove all elements |
+| ▶ Preview | | Launch AM+ with the current layout |
+| 🎨 Theme | | Choose a colour theme |
+
+> All buttons have **tooltips** — hover to see what each one does.
+
+---
+
+## Resolution Bar
+
+Set the layout canvas size:
+
+- **W / H** — type width and height directly
+- **Presets** — dropdown: 640×480 up to 3840×2160
+- **Canvas Zoom** — slider to scale the preview (0.1–1.0)
 
 ---
 
@@ -49,24 +123,22 @@ The centre panel is a live **scaled preview** of your layout.
 | Drag an element | Reposition it |
 | Drag the orange corner handle | Resize it |
 | Right-click an element | Context menu — delete, duplicate, z-order |
-| Mouse wheel | Scroll the canvas |
-| **Zoom slider** *(resolution bar)* | Scale the canvas preview |
-| **W / H fields** | Set layout resolution |
-| **Preset dropdown** | Pick a standard resolution (640×480 → 3840×2160) |
 
 ### Background Reference Image
 
-Drop a PNG/JPG screenshot of your cabinet or monitor onto the canvas to use as a visual guide — it does **not** affect the generated `.nut` code.
+Drop a PNG/JPG screenshot of your cabinet onto the canvas as a visual guide.  
+It does **not** affect the generated `.nut` code.
 
 | Control | Action |
 |---|---|
-| 📂 Load BG Image | File dialog to pick a PNG/JPG |
+| 📂 Load BG Image | File dialog — pick any PNG/JPG |
+| View > Load BG Image… | Same via menu |
 | Show BG checkbox | Toggle visibility |
-| Opacity slider | 0–100 %, defaults to 40 % |
+| Opacity slider | 0–100%, default 40% |
 | 🗑 Clear BG | Remove the image |
-| Drag a file onto the canvas | Loads as background *(if no image element selected)* |
+| Drag file onto canvas | Loads as BG *(if no image element selected)* |
 
-> **Tip:** If an **image** element is selected when you drag a file onto the canvas, the file is assigned to that element instead of the background.
+> **Tip:** Drag a file onto the canvas while an **image** element is selected to assign the PNG to that element instead.
 
 ---
 
@@ -74,24 +146,23 @@ Drop a PNG/JPG screenshot of your cabinet or monitor onto the canvas to use as a
 
 ### Elements Tab
 
-Select an element type and click **+ Add Element** to place it on the canvas.
-
-Hover any type name to see a tooltip description.
+Click a type to select it, then click **+ Add Element** — or just click the type row to add immediately.  
+Hover any row to see a description tooltip. The selected type stays highlighted.
 
 | Type | Description |
 |---|---|
-| `snap` | Current game screenshot |
-| `wheel` | Game logo / wheel art |
+| `artwork` | Generic artwork slot (custom path name) |
 | `boxart` | Box / cover artwork |
-| `marquee` | Arcade cabinet marquee strip |
-| `flyer` | Promotional flyer artwork |
 | `fanart` | Fan-made background art |
-| `video` | Video preview clip |
-| `text` | Meta token or custom string |
+| `flyer` | Promotional flyer artwork |
 | `image` | **Static PNG/JPG** — frames, overlays, bezels, logos |
-| `surface` | Layered offscreen render surface |
-| `artwork` | Generic artwork (custom slot name) |
+| `marquee` | Arcade cabinet marquee strip |
 | `shader_layer` | GLSL shader effect overlay |
+| `snap` | Current game screenshot |
+| `surface` | Layered offscreen render surface |
+| `text` | Meta token or custom string |
+| `video` | Video preview clip |
+| `wheel` | Game logo / wheel art |
 
 **Element List** buttons:
 
@@ -108,57 +179,31 @@ Hover any type name to see a tooltip description.
 ### Modules Tab
 
 Check any module to include `fe.load_module("name")` in the output.  
-Hover a module name to see its description and file name in a tooltip.
-
-Included modules cover: `animate`, `blur`, `config`, `conveyor`, `fade`, `file`, `flow`, `gtc`, `inertia`, `mask`, `math`, `objects`, `perspective`, `pan_and_scan`, `surface`, `wheel`, and more.
-
----
-
-### CFG Gen Tab
-
-Generate an `emulator.cfg` emulator entry.
-
-**Fields:**
-
-| Field | Notes |
-|---|---|
-| Emulator | MAME, RetroArch, or Other |
-| System | Pre-filled list per emulator |
-| ROM Extensions | e.g. `.zip .7z` |
-| Executable Path | For Other emulator type |
-| Arguments | For Other emulator type |
-| Artwork Folders | Checkboxes — All / None shortcuts |
-| `nb_mode_wait` | e.g. `10` |
-| `import_extras` | e.g. `$PROGDIR\extras\extras.txt` |
-
-The **PREVIEW** pane shows live-updating config text. You can **edit it directly** before saving — your changes are preserved. Click **↺ Regenerate** to rebuild from the fields above.
-
-**Emulator Website Links** — 12 buttons open official download pages in your browser:  
-MAME · RetroArch · PCSX2 · RPCS3 · Dolphin · Cemu · Ryujinx · Duckstation · PPSSPP · FBNeo · ScummVM · DOSBox
+Hover a module name to see its description in a tooltip.  
+The selected module row stays highlighted until you uncheck it.
 
 ---
 
 ### Snippets Tab
 
-Browse and insert reusable `.txt` code snippets.
+Browse and insert reusable `.txt` code snippets into the layout.nut editor.
 
 | Control | Action |
 |---|---|
 | 📂 Open Folder | Load a folder of `.txt` snippet files |
 | 🔄 Reload | Refresh the file list |
-| Filter buttons | Filter by category: All / wheel / snap / meta / text / other |
-| 🔍 Search | Filter by name |
-| Single-click | Preview the snippet |
+| Category buttons | Filter: All / wheel / snap / meta / text / other |
+| 🔍 Search | Filter by filename |
+| Single-click | Preview the snippet with syntax highlighting |
 | Double-click | Insert into layout.nut |
 | ⎘ Insert | Insert selected snippet |
 | 📋 Copy | Copy to clipboard |
 | 📄 Open | Open file in default editor |
 
-The **IN LAYOUT** list tracks snippets added to the current session. Double-click to edit, ✕ Remove / ✕ All to remove.
+The **IN LAYOUT** section tracks snippets added. Double-click to edit, ✕ to remove.
 
-> All three panes (file list, preview, added list) are split by draggable sashes.
-
-> A `snippets/` folder next to the script is auto-loaded on startup if it exists.
+> A `snippets/` folder next to the script is auto-loaded on startup if it exists.  
+> All three panes (list / preview / added) have draggable sashes.
 
 ---
 
@@ -166,34 +211,34 @@ The **IN LAYOUT** list tracks snippets added to the current session. Double-clic
 
 ### Properties Tab
 
-All fields update the `layout.nut` code live as you edit.
+All fields update the `layout.nut` code live.
 
 #### Position & Size
 `Name` · `X` · `Y` · `Width` · `Height` · `Rotation` · `Z-Order`
 
-> Z-Order is written to the `.nut` file and controls draw order.
+> Z-Order is written to the `.nut` file. Changing it updates the draw order.
 
 #### Image File *(image type only)*
-- **File Path** entry + **Browse** button
-- Or drag a PNG/JPG onto the canvas while the element is selected
+- File path entry + **Browse** button
+- Or drag a PNG/JPG onto the canvas while an image element is selected
 
 #### Snap / Video Transforms *(snap and video only)*
 | Field | Description |
 |---|---|
-| Pinch X | Pinch the corners horizontally e.g. `0.3` |
-| Pinch Y | Pinch the corners vertically e.g. `0.3` |
+| Pinch X | Pinch corners horizontally e.g. `0.3` |
+| Pinch Y | Pinch corners vertically e.g. `0.3` |
 | Skew X | Skew horizontally e.g. `0.2` |
 | Skew Y | Skew vertically e.g. `0.1` |
 
 #### RGB Tint *(snap, video, image)*
-`Red` · `Green` · `Blue` — 0–255 each.  
-Default `255, 255, 255` = no tint (not written to `.nut`).
+`Red` · `Green` · `Blue` — 0–255.  
+Default `255,255,255` = no tint (omitted from `.nut`).
 
 #### Appearance
 `Alpha (0–255)` · `Blend Mode` · `Visible` · `Preserve Aspect Ratio` · `No Audio`
 
 #### Text *(text type only)*
-**Meta Token** dropdown — pick from all AM+ magic tokens:
+**Meta Token** dropdown — all AM+ magic tokens:
 
 | Category | Tokens |
 |---|---|
@@ -201,17 +246,16 @@ Default `255, 255, 255` = no tint (not written to `.nut`).
 | Navigation | `[ListSize]` `[ListEntry]` `[FilterName]` |
 | Clock | `[!%H:%M]` `[!%H:%M:%S]` `[!%d/%m/%Y]` `[!%A, %d %B %Y]` |
 | Screen | `[ScreenWidth]` `[ScreenHeight]` |
-| Custom | `-- custom --` *(reveals a free-text field)* |
+| Custom | `-- custom --` *(reveals a free-text entry)* |
 
-**Font** — dropdown of 35 fonts across 5 categories (also editable for custom font names):
+**Font** — dropdown of 35 fonts (also editable for custom names):
 - Sans-serif: Arial, Verdana, Tahoma, Calibri, Trebuchet MS, Century Gothic, Franklin Gothic
 - Serif: Times New Roman, Georgia, Palatino, Garamond
 - Monospace: Courier New, Consolas, Lucida Console
 - Arcade/Display: Impact, Agency FB, Bebas Neue, Oswald, Righteous
 - Pixel/Retro: Press Start 2P, VT323, 04b\_03
 
-**Font Size** — dropdown (12–128) also editable for any value.
-
+**Font Size** — dropdown (12–128), also editable.  
 **Align** · **Font Color** picker
 
 #### Animation
@@ -226,74 +270,108 @@ Live-updating Squirrel code with syntax highlighting.
 | Button | Action |
 |---|---|
 | 📋 Copy | Copy all code to clipboard |
-| 💾 Save .nut | Save the code to a file |
-| ▶ Preview | Launch Attract-Mode Plus with the current layout |
+| 💾 Save .nut | Save to a file |
+| ▶ Preview | Launch AM+ with the current layout |
 | ↺ Regenerate | Rebuild code from visual elements *(discards manual edits)* |
 | 🏷 Layout Info | Set name, author, version, date, notes for the file header |
-| Auto-update | Toggle live regeneration from properties panel changes |
+| Auto-update | Toggle live regeneration when properties change |
 
-> Once you type directly in the code editor, auto-update stops overwriting your edits.  
-> Click **↺ Regenerate** to go back to auto-generated code at any time.
+> Once you type in the code editor, auto-update stops overwriting your edits.  
+> Click **↺ Regenerate** to go back to auto-generated code.
 
-#### 🏷 Layout Info
-Fields written into the header comment of `layout.nut`:
+#### Layout Info Header
 
-```
+Fields written into the top of `layout.nut`:
+
+```squirrel
 //////////////////////////////////////////////////////////////
 //  My Arcade Layout
 //  Author  : Your Name Here
 //  Version : 1.0
-//  Date    : 2025-04-30
+//  Date    : 05-26-2026
 //  Notes   : 16:9 widescreen layout
 //  Generated by Attract-Mode Plus Layout Designer
 //////////////////////////////////////////////////////////////
 ```
 
 - **Today** button fills the date automatically
-- Live preview of the header updates as you type
+- Live preview updates as you type
 
 ---
 
-### Reference Tab
+## Tools Menu Windows
 
-Searchable Squirrel + AM+ API reference. Click an entry to see full details with syntax-highlighted examples. **⎘ Insert** puts the code snippet into the layout.nut editor.
+Each tool opens in its own full-size resizable window.
 
----
+### Romlist Editor
+| Feature | Details |
+|---|---|
+| 📂 Open | Load a `.romlist` file |
+| 💾 Save / Save As | Write changes to disk |
+| ✎ Bulk Edit | Set an entire column to one value |
+| + Add Row / ✕ Del Row | Add or remove rows |
+| 🔍 Search | Filter rows live |
+| Double-click cell | Edit inline |
+| Right-click | Bulk edit column shortcut |
 
-### AM+ Docs Tab
+### CFG Generator
 
-Loads and renders `Layouts.md` from your AM+ installation. Searchable, section-navigable, copyable.
+Generate an `attract.cfg` emulator entry.
+
+| Field | Notes |
+|---|---|
+| Emulator | MAME, RetroArch, or Other |
+| System | Pre-filled list per emulator |
+| ROM Extensions | e.g. `.zip .7z` |
+| Executable / Args | For Other emulator type |
+| Artwork Folders | Checkboxes with All/None shortcuts |
+| `nb_mode_wait` | e.g. `10` |
+| `import_extras` | e.g. `$PROGDIR\extras\extras.txt` |
+
+The preview is **editable** before saving. Click **↺ Regenerate** to rebuild from fields.  
+Emulator website links open official download pages (MAME, RetroArch, PCSX2, RPCS3, Dolphin, Cemu, Ryujinx, Duckstation, PPSSPP, FBNeo, ScummVM, DOSBox).
+
+### Reference
+Searchable Squirrel + AM+ API reference with syntax-highlighted examples.  
+**⎘ Insert** puts a snippet into the layout.nut editor.
+
+### AM+ Docs
+Loads and renders `Layouts.md`. Searchable by section, copyable.
+
+### Snippet Manager
+Same as the Snippets tab in the left panel — available here as a full-size popup.
 
 ---
 
 ## ▶ Preview
 
-Launches **Attract-Mode Plus** with your current layout — no need to save manually first.
+Launches **Attract-Mode Plus** with the current layout — no manual save needed first.
 
 ### Setup
 
-**Option A** — drop `RunMe.exe` into the `preview/` folder next to the script. Auto-detected, no configuration needed.
+**Option A** — drop `attractplus.exe` into the `preview/` folder next to the script. Auto-detected.
 
-**Option B** — click ▶ Preview and use the Browse dialog to locate `RunMe.exe` anywhere on your machine. Path is saved to `preview/attract_exe.cfg` for future sessions.
+**Option B** — click ▶ Preview, use the Browse dialog to locate `RunMe.exe`. Saved to `preview/attract_exe.cfg` for future sessions.
 
 ### Folder structure
 
 ```
 preview/
-  attractplus.exe          ← AM+ binary
+  attractplus.exe        ← AM+ binary
   layouts/
-    test/                  ← created automatically
-      layout.nut           ← written fresh on every preview
-  romlists/                ← your test romlists (optional)
+    test/                ← created automatically
+      layout.nut         ← written fresh on every preview
+  romlists/              ← optional test romlists
 ```
 
-> The layout folder name is taken from where you last saved your `.nut` file, falling back to `test`.
+> The layout folder name is taken from where you last saved your `.nut`, defaulting to `test`.
 
 ---
 
 ## 🎨 Themes
 
-8 built-in colour schemes. The active theme is marked with **✓**.
+8 built-in colour schemes — **View > Choose Theme** or the toolbar button.  
+The active theme is marked with **✓**.
 
 | Theme | Style |
 |---|---|
@@ -301,29 +379,12 @@ preview/
 | Slate Pro | Dark blue-grey |
 | Cyan Night | Dark with cyan accents |
 | Amber Dark | Dark with amber/orange |
-| Green Matrix | Dark with green terminal style |
+| Green Matrix | Dark green terminal style |
 | Purple Haze | Dark with purple/pink |
 | Red Alert | Dark with red accents |
 | Warm Mocha | Dark warm brown/tan |
 
-Each theme automatically switches CTK between light and dark appearance mode.
-
----
-
-## 📋 Romlist Editor
-
-Opens in its own full-size resizable window. Also accessible from the left panel Romlist tab.
-
-| Feature | Details |
-|---|---|
-| 📂 Open | Load a `.romlist` file |
-| 💾 Save / Save As | Write changes back to disk |
-| ✎ Bulk Edit | Set an entire column to one value |
-| + Add Row | Append a blank row |
-| ✕ Del Row | Remove selected row |
-| 🔍 Search | Filter rows live |
-| Double-click cell | Edit inline |
-| Right-click | Context menu — bulk edit column |
+Each theme switches CTK between light and dark appearance mode automatically.
 
 ---
 
@@ -331,14 +392,18 @@ Opens in its own full-size resizable window. Also accessible from the left panel
 
 Save your `layout.nut` and place it in:
 
+**Linux / Mac:**
 ```
 ~/.attract/layouts/YOUR_LAYOUT_NAME/layout.nut
 ```
 
-Or on Windows:
+**Windows:**
 ```
 %USERPROFILE%\AppData\Roaming\attract\layouts\YOUR_LAYOUT_NAME\layout.nut
 ```
+
+
+Clicking **Help > Check for Updates / Website** opens this URL in the browser.
 
 ---
 
@@ -347,9 +412,8 @@ Or on Windows:
 Built with ❤️ by **JJTheKing**  
 AI assistance: Claude & DeepSeek  
 Wheel code snippets: **Tankman3737**
-Feedback: **Oomek**
-Feedback: **PaCiFiKbAllA**
-Version: 5.9
+Feedback: **Oomek , Chadnaut , PaCiFiKbAllA**
+
 
 
 Color Changer
