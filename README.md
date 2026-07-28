@@ -32,10 +32,10 @@ The app has three zones:
 │  Toolbar:   Load · Save · Clear · Preview · Theme               │
 │  Res bar:   W · H · Presets · Zoom                              │
 ├──────────────┬──────────────────────────────┬───────────────────┤
-│  Left panel  │       Canvas (preview)        │   Right panel     │
-│  Elements    │                               │   Properties      │
-│  Modules     │                               │   layout.nut      │
-│  Snippets    │                               │                   │
+│  Left panel  │       Canvas (preview)       │   Right panel     │
+│  Elements    │                              │   Properties      │
+│  Modules     │                              │   layout.nut      │
+│  Snippets    │                              │                   │
 └──────────────┴──────────────────────────────┴───────────────────┘
 ```
 
