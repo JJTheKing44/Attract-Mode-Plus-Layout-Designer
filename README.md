@@ -468,7 +468,7 @@ Save your `layout.nut` and place it in:
 Open the script and update near the top:
 
 ```python
-VERSION    = "6.9"
+VERSION    = "7.1"
 UPDATE_URL = "https://free-3980544.webador.com/am-updates"
 ```
 
