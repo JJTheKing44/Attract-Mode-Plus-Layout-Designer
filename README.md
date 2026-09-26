@@ -5,7 +5,7 @@
 A visual drag-and-drop layout builder for **Attract-Mode Plus** frontends.  
 Build, preview, and export `layout.nut` files without writing Squirrel script by hand.
 
-**Version 7.0**
+**Version 7.1**
 
 > Two companion tools ship alongside this one as separate scripts, each usable on its own:
 > **[CFG Generator](./README-cfg-generator.md)** and **[Romlist Editor](./README-romlist-editor.md)**.
